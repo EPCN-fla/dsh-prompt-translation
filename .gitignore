@@ -1,0 +1,7 @@
+node_modules/
+lib/
+artifacts/
+docs/develop/
+*.tgz
+coverage/
+.env

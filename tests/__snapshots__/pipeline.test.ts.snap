@@ -1,0 +1,78 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`translates completed blocks consistently and preserves tool/usage/finish payloads 1`] = `
+[
+  {
+    "blockType": "reasoning",
+    "index": 0,
+    "type": "block-start",
+  },
+  {
+    "index": 0,
+    "text": "译:think",
+    "type": "reasoning-delta",
+  },
+  {
+    "block": {
+      "dshAssistantTranslation": {
+        "original": "think",
+        "version": 1,
+      },
+      "text": "译:think",
+      "type": "reasoning",
+    },
+    "index": 0,
+    "type": "block-end",
+  },
+  {
+    "blockType": "text",
+    "index": 1,
+    "type": "block-start",
+  },
+  {
+    "index": 1,
+    "text": "译:answer",
+    "type": "text-delta",
+  },
+  {
+    "block": {
+      "dshAssistantTranslation": {
+        "original": "answer",
+        "version": 1,
+      },
+      "text": "译:answer",
+      "type": "text",
+    },
+    "index": 1,
+    "type": "block-end",
+  },
+  {
+    "blockType": "tool-call",
+    "index": 2,
+    "type": "block-start",
+  },
+  {
+    "block": {
+      "arguments": "{"path":"/tmp/a"}",
+      "id": "call",
+      "name": "read",
+      "type": "tool-call",
+    },
+    "index": 2,
+    "type": "block-end",
+  },
+  {
+    "type": "usage",
+    "usage": {
+      "inputTokens": 3,
+      "outputTokens": 5,
+    },
+  },
+  {
+    "reason": {
+      "kind": "tool-calls",
+    },
+    "type": "finish",
+  },
+]
+`;

@@ -1,0 +1,3 @@
+- insert:
+    - id: prompt-translation
+      name: dsh-prompt-translation

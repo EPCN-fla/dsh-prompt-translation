@@ -1,0 +1,134 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never interrupt a publication that may already have reached npm.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  verify:
+    name: verify (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run test:browser
+      - name: retain the verified package
+        if: matrix.node == 24
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: |
+            artifacts/*.tgz
+            artifacts/SHA256SUMS
+            artifacts/package.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-node-${{ matrix.node }}
+          path: |
+            artifacts/browser-*.png
+            artifacts/browser-result.json
+          if-no-files-found: ignore
+
+  compatibility:
+    name: full Web (DSH ${{ matrix.dsh }})
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: ['0.2.0-rc.1', '0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: artifacts
+      - name: verify artifact checksum
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+      - name: install the exact complete host
+        env:
+          DSH_VERSION: ${{ matrix.dsh }}
+        run: npm run host:install -- "$DSH_VERSION"
+      - name: cold start and exercise the packed plugin
+        env:
+          DSH_VERSION: ${{ matrix.dsh }}
+        run: npm run test:host -- "$DSH_VERSION"
+      - name: retain test evidence (no Profile or request logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-web-${{ matrix.dsh }}
+          path: |
+            artifacts/full-hosts/${{ matrix.dsh }}/result.json
+            artifacts/full-hosts/${{ matrix.dsh }}/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: npm publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # npm OIDC requires >=11.5.1. No long-lived npm token is used.
+      - run: npm install --global npm@11.6.2
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: artifacts
+      - name: verify artifact checksum
+        working-directory: artifacts
+        run: sha256sum --check SHA256SUMS
+      - name: version, tag and npm latest gates
+        id: gate
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/release-gate.mjs
+      - name: publish the tested tarball using OIDC
+        env:
+          DIST_TAG: ${{ steps.gate.outputs.dist-tag }}
+        run: npm publish artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$DIST_TAG" --registry https://registry.npmjs.org
+      - name: verify the registry received these exact bytes
+        run: node scripts/verify-published.mjs

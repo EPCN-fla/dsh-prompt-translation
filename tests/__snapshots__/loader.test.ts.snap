@@ -1,0 +1,56 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loads the built bundle through the real Loader and runs prompt → model → translated stream without recursion 1`] = `
+{
+  "chunks": [
+    {
+      "blockType": "text",
+      "index": 0,
+      "type": "block-start",
+    },
+    {
+      "index": 0,
+      "text": "translated:model answer",
+      "type": "text-delta",
+    },
+    {
+      "block": {
+        "dshAssistantTranslation": {
+          "original": "model answer",
+          "version": 1,
+        },
+        "text": "translated:model answer",
+        "type": "text",
+      },
+      "index": 0,
+      "type": "block-end",
+    },
+    {
+      "reason": {
+        "kind": "stop",
+      },
+      "type": "finish",
+    },
+  ],
+  "request": [
+    {
+      "content": [
+        {
+          "text": "SYSTEM DO NOT TRANSLATE",
+          "type": "text",
+        },
+      ],
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "translated:你好",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+}
+`;
