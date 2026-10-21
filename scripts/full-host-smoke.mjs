@@ -1,3 +1,4 @@
+import { waitForCompletedTurns, hostTurnDiagnostics } from './host-turn-state.mjs'
 import { readCompatibility } from './ci-compatibility.mjs'
 import { chromium } from 'playwright-core'
 import { spawn, execFileSync } from 'node:child_process'
@@ -43,6 +44,7 @@ host.stdout.on('data',d=>{output+=d});host.stderr.on('data',d=>{output+=d})
 let browser
 const errors=[];const resources=[]
 let page
+let stage = 'startup and settings'
 const wait = ms=>new Promise(r=>setTimeout(r,ms))
 async function dismiss() {
  for(let n=0;n<5;n++) {
@@ -101,9 +103,11 @@ try {
  if(position.planLeft!==undefined)assert.ok(position.translationRight<=position.planLeft)
  await page.keyboard.press('Escape')
  const editor=page.locator('[contenteditable="true"]').first()
+ stage = 'first turn'
  await editor.fill('测试消息 SMOKE_USER')
  await page.getByRole('button',{name:'Send message',exact:true}).click()
  await page.getByText('中文:SMOKE_ANSWER',{exact:false}).first().waitFor({timeout:25000})
+ await waitForCompletedTurns(page, 1)
  await writeFile(join(root,'after-turn.txt'),await page.locator('body').innerText())
  await page.getByText('测试消息 SMOKE_USER',{exact:true}).waitFor({timeout:3000})
  await page.screenshot({path:join(root,'conversation.png'),fullPage:true})
@@ -111,14 +115,18 @@ try {
  await dialog.getByLabel('目标语言',{exact:true}).selectOption('en')
  await page.waitForFunction(()=>document.querySelector('select[aria-label="目标语言"]')?.value==='en' && !document.querySelector('select[aria-label="目标语言"]')?.disabled)
  await page.keyboard.press('Escape')
+ stage = 'second turn'
  await editor.fill('第二条 SMOKE_USER_2')
  await page.getByRole('button',{name:'Send message',exact:true}).click()
  await page.getByText('第二条 SMOKE_USER_2',{exact:true}).first().waitFor({timeout:25000})
- await page.waitForFunction(()=>document.querySelector('[contenteditable="true"]')?.textContent === '')
- await page.waitForFunction(()=>document.querySelector('[aria-label="Send message"]') !== null)
+ // Both fixture replies have the same text: the first reply cannot satisfy this wait.
+ await page.getByText('中文:SMOKE_ANSWER',{exact:true}).nth(1).waitFor({timeout:25000})
+ await waitForCompletedTurns(page, 2)
+ stage = 'reload completed conversation'
  await page.reload(); await wait(1500); await dismiss()
  await page.getByText('第二条 SMOKE_USER_2',{exact:true}).first().waitFor()
- // Translation errors retain the submitted text and never call the main model.
+ await waitForCompletedTurns(page, 2)
+ stage = 'trajectory comparisons'
  await page.getByRole('tab',{name:'Trajectory',exact:true}).click()
  await wait(500)
  await page.locator('tr[data-kind="user"]').last().click()
@@ -146,6 +154,8 @@ try {
  await page.screenshot({path:join(root,'assistant-raw.png'),fullPage:true})
  await page.getByRole('tab',{name:'Chat',exact:true}).click()
  assert.equal(await page.getByText('翻译前 / Original',{exact:false}).count(), 0)
+ // Translation errors retain the submitted text and never call the main model.
+ stage = 'translation failure'
  const beforeFailure=(await readFile(callsPath,'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(call=>call.model==='main').length
  await page.locator('[contenteditable="true"]').first().fill('FAIL_TRANSLATION')
  await page.getByRole('button',{name:'Send message',exact:true}).click()
@@ -170,7 +180,9 @@ try {
  const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','real settings persisted and reload verified','composer placement','quick setting','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message survives reload','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
  await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 }catch(error){
- await writeFile(join(root,'result.json'),JSON.stringify({version,result:'fail',error:String(error),errors,resources},null,2))
+ const state = await page?.evaluate(hostTurnDiagnostics).catch(()=>undefined)
+ console.error('Full-host smoke failed:', JSON.stringify({version,stage,state}))
+ await writeFile(join(root,'result.json'),JSON.stringify({version,result:'fail',stage,state,error:String(error),errors,resources},null,2))
  if(page){await writeFile(join(root,'failure-dom.txt'),await page.locator('body').innerText().catch(()=>''));await page.screenshot({path:join(root,'failure.png'),fullPage:true}).catch(()=>{})}
  throw error
 }finally{
