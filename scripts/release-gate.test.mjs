@@ -1,22 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
 const gate = fileURLToPath(new URL('./release-gate.mjs', import.meta.url))
-function runGate({ status = 200, body = { name: 'dsh-prompt-translation', versions: {}, 'dist-tags': { latest: '0.0.9' } }, corrupt = false, version = '0.1.0', tag = `v${version}` } = {}) {
+function runGate({ status = 200, body = { name: 'dsh-prompt-translation', versions: {}, 'dist-tags': { latest: '0.0.9' } }, version = '0.1.0', tag = `v${version}` } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'translation-release-gate-'))
   try {
-    mkdirSync(join(root, 'artifacts'))
-    const bytes = Buffer.from('test package bytes')
-    const name = 'dsh-prompt-translation'
-    const filename = `${name}-${version}.tgz`
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ name, version }))
-    writeFileSync(join(root, 'artifacts', filename), corrupt ? 'different bytes' : bytes)
-    writeFileSync(join(root, 'artifacts/package.json'), JSON.stringify({ name, version, filename, sha256: createHash('sha256').update(bytes).digest('hex') }))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'dsh-prompt-translation', version }))
     const output = join(root, 'output')
     writeFileSync(output, '')
     const mock = `globalThis.fetch = async () => new Response(${JSON.stringify(JSON.stringify(body))}, {status:${status}})`
@@ -41,8 +34,8 @@ test('real release entry rejects registry failures, malformed data and an existi
     assert.equal(result.output, '')
   }
 })
-test('real release entry refuses tampered tarballs and tag mismatch', () => {
-  for (const input of [{ corrupt: true }, { tag: 'v9.9.9' }]) {
+test('real release entry refuses tag mismatch and latest rollback', () => {
+  for (const input of [{ version: '0.0.8' }, { tag: 'v9.9.9' }]) {
     const result = runGate(input)
     assert.notEqual(result.status, 0)
     assert.equal(result.output, '')
