@@ -1,3 +1,4 @@
+import { readCompatibility } from './ci-compatibility.mjs'
 import { chromium } from 'playwright-core'
 import { spawn, execFileSync } from 'node:child_process'
 import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises'
@@ -9,7 +10,7 @@ import { existsSync } from 'node:fs'
 const version = process.argv[2]
 const pkg = JSON.parse(await readFile('package.json', 'utf8'))
 const tarball = resolve('artifacts', `${pkg.name}-${pkg.version}.tgz`)
-if (!['0.2.0-rc.1','0.2.0-rc.2','0.2.1-rc.1','0.2.1-rc.2'].includes(version)) throw new Error('Specify an exact supported test version')
+if (!Object.hasOwn(readCompatibility().entries, version)) throw new Error('Specify an exact supported test version')
 const root = resolve('artifacts/full-hosts', version)
 const home = join(root, 'home')
 const cli = join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')

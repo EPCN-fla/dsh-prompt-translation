@@ -1,8 +1,9 @@
+import { readCompatibility } from './ci-compatibility.mjs'
 import { execFileSync } from 'node:child_process'
 import { writeFile, mkdir } from 'node:fs/promises'
 const source = process.argv[2]
 if (!source) throw new Error('Usage: node scripts/compatibility.mjs /path/to/deepseek-harness')
-const versions = ['0.2.0-rc.1', '0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2']
+const versions = Object.keys(readCompatibility().entries)
 const seams = {
   'packages/core/agent/src/runtime-types.ts': ['agent/pre-step', "kind: 'enter'", 'messages: UserMessage[]'],
   'packages/llm/llm/src/index.ts': ['llm/stream', 'isAgentLoopRequest', 'freezeMessage'],
