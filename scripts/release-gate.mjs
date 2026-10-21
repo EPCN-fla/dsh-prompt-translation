@@ -1,13 +1,7 @@
 import { readFile, appendFile } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { releasePolicy } from './release-policy.mjs'
 const pkg = JSON.parse(await readFile('package.json', 'utf8'))
-const artifact = JSON.parse(await readFile('artifacts/package.json', 'utf8'))
-assert.equal(artifact.name, pkg.name)
-assert.equal(artifact.version, pkg.version)
-assert.equal(artifact.filename, `${pkg.name}-${pkg.version}.tgz`)
-assert.equal(createHash('sha256').update(await readFile(`artifacts/${artifact.filename}`)).digest('hex'), artifact.sha256)
 const policy = releasePolicy(pkg.version, process.env.RELEASE_TAG)
 const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(pkg.name)}`, { signal: AbortSignal.timeout(20000) })
 let latest

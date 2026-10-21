@@ -1,8 +1,9 @@
+import { readCompatibility } from './ci-compatibility.mjs'
 import { execFileSync } from 'node:child_process'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve, join } from 'node:path'
-export const versions = ['0.2.0-rc.1', '0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2']
+export const versions = Object.keys(readCompatibility(new URL('../package.json', import.meta.url)).entries)
 const version = process.argv[2]
 if (!versions.includes(version)) throw new Error('Specify an exact supported DSH version')
 const root = resolve('artifacts/full-hosts', version)

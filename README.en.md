@@ -39,7 +39,7 @@ The correspondence matrix between plugin versions and DSH versions is as follows
 
 | Plugin version | Compatible DSH versions |
 | --- | --- |
-| 0.1.0 | ≥0.2.0-rc.1 <0.2.0 \|\| ≥0.2.1-rc.1 <0.2.1 |
+| 0.1.0 ~ 0.1.1 | ≥0.2.0-rc.1 <0.2.0 \|\| ≥0.2.1-rc.1 <0.2.1 |
 
 All methods below add the plugin to a selected Profile (`web` in these examples). The package includes `cordis.patch.yml`, so DSH mounts the Host plugin and loads its Web client module automatically; no additional composition configuration is required.
 
@@ -72,7 +72,7 @@ npm pack
 dsh plugin --profile web add ./dsh-prompt-translation-<version>.tgz
 ```
 
-Alternatively, download the `release-package` artifact from GitHub Actions, extract the prebuilt tarball, and run the final installation command. CI does not create GitHub Releases.
+CI does not upload packages or test evidence and does not create GitHub Releases. For a local tarball, build it using the steps above.
 
 ### Local development
 
@@ -208,11 +208,12 @@ npm run test:host -- 0.2.1-rc.2
 | `tests/pipeline.test.ts` | User-source filtering, message identity, streamed text blocks, and tool-data preservation |
 | `tests/client.test.tsx` | Settings writes, conflict retries, credential protection, async races, and control cleanup |
 | `tests/loader.test.ts` | Built-entry loading through the real Cordis Loader, translation, and unloading |
-| `scripts/release-*.test.mjs` | Version policy, registry failures, and artifact-integrity release gates |
+| `scripts/ci.test.mjs` | CI matrix, dependency cohort selection, failure summaries, and trigger policy |
+| `scripts/release-*.test.mjs` | Version policy, tag matching, and registry-failure release gates |
 | `scripts/browser-smoke.mjs` | Built browser module, control placement, desktop and mobile viewports |
 | `scripts/full-host-smoke.mjs` | Exact-version full Web cold starts, settings reload, and a user turn |
 
-CI validates Node 22/24 and runs full Web checks against the four tested DSH versions. PRs, `main` pushes, and manual runs only validate. A `v*` tag publishes the same tested artifact through npm OIDC after all checks pass. It does not create a GitHub Release; the package and checksum remain available as Actions artifacts.
+CI runs only for PRs and `v*` tag pushes, not ordinary branch pushes. PRs read the exact version matrix from `package.json` → `dshCompatibility`, with one job per DSH version. Each job selects the matching DSH/Cordis development dependencies and verifies Node 22 then 24 using the same lockfile: type checking, unit and script tests, builds, package inspection, and browser checks. Full Web host checks run on Node 22. Node 22 failures do not prevent Node 24 verification; results appear in Actions Summary. Tags independently run version gates, build, and publish through npm OIDC without tests or dependencies on PR jobs; ensure the tagged commit has passed PR checks first. Prereleases use `next`; stable releases use `latest` with rollback protection. No artifacts or GitHub Releases are uploaded; temporary packages and evidence stay on the runner.
 
 ## License
 

@@ -1,105 +1,100 @@
+# Branch pushes do not run CI. PR: one job per DSH, Node 22 then 24.
+# v* tags: build + npm Trusted Publishing only; no tests or artifact uploads.
 name: ci
 
 on:
   pull_request:
   push:
-    branches: [main]
     tags: ['v*']
-  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never interrupt a publication that may already have reached npm.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  verify:
-    name: verify (Node ${{ matrix.node }})
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [22, 24]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run check
-      - run: npm run test:browser
-      - name: retain the verified package
-        if: matrix.node == 24
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-package
-          path: |
-            artifacts/*.tgz
-            artifacts/SHA256SUMS
-            artifacts/package.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-node-${{ matrix.node }}
-          path: |
-            artifacts/browser-*.png
-            artifacts/browser-result.json
-          if-no-files-found: ignore
-
   compatibility:
-    name: full Web (DSH ${{ matrix.dsh }})
-    needs: verify
+    name: Read supported DSH versions
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        dsh: ['0.2.0-rc.1', '0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2']
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read package compatibility
+        id: matrix
+        run: node scripts/ci-compatibility.mjs matrix
+
+  verify:
+    name: DSH ${{ matrix.dsh-version }} · Node 22 + 24
+    needs: compatibility
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.compatibility.outputs.matrix) }}
+    env:
+      DSH_TEST_VERSION: ${{ matrix.dsh-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        id: setup22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Select exact DSH cohort
+        id: cohort
+        run: |
+          # Validate the committed lock before selecting a different cohort.
+          npm ci --ignore-scripts
+          CHANGED=$(node scripts/ci-compatibility.mjs select "$DSH_TEST_VERSION")
+          if [ "$CHANGED" = 'changed=true' ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          fi
+      - name: Verify Node 22
+        id: verify22
+        if: ${{ !cancelled() && steps.cohort.outcome == 'success' }}
+        run: node scripts/ci-verify.mjs verify 22
+      # The packed plugin and browser evidence remain on this runner only.
+      - name: Exact full Web host smoke (Node 22)
+        id: smoke
+        if: ${{ !cancelled() && steps.verify22.outcome == 'success' }}
+        run: |
+          npm run host:install -- "$DSH_TEST_VERSION"
+          npm run test:host -- "$DSH_TEST_VERSION"
+      # Node 22 or host failures must not hide the Node 24 result.
+      - name: Set up Node 24
+        id: setup24
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-package
-          path: artifacts
-      - name: verify artifact checksum
-        working-directory: artifacts
-        run: sha256sum --check SHA256SUMS
-      - name: install the exact complete host
-        env:
-          DSH_VERSION: ${{ matrix.dsh }}
-        run: npm run host:install -- "$DSH_VERSION"
-      - name: cold start and exercise the packed plugin
-        env:
-          DSH_VERSION: ${{ matrix.dsh }}
-        run: npm run test:host -- "$DSH_VERSION"
-      - name: retain test evidence (no Profile or request logs)
+      - name: Verify Node 24
+        id: verify24
+        if: ${{ !cancelled() && steps.setup24.outcome == 'success' && steps.cohort.outcome == 'success' }}
+        run: node scripts/ci-verify.mjs verify 24
+      - name: Test summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-web-${{ matrix.dsh }}
-          path: |
-            artifacts/full-hosts/${{ matrix.dsh }}/result.json
-            artifacts/full-hosts/${{ matrix.dsh }}/*.png
-          if-no-files-found: ignore
-          retention-days: 14
+        env:
+          SETUP_22: ${{ steps.setup22.outcome }}
+          SETUP_24: ${{ steps.setup24.outcome }}
+          VERIFY_22: ${{ steps.verify22.outcome }}
+          VERIFY_24: ${{ steps.verify24.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+        run: node scripts/ci-verify.mjs summary
 
   publish:
-    name: npm publish
+    name: build + npm publish
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, compatibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -112,23 +107,19 @@ jobs:
           node-version: 24
           cache: npm
       # npm OIDC requires >=11.5.1. No long-lived npm token is used.
-      - run: npm install --global npm@11.6.2
-      - run: npm ci --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-package
-          path: artifacts
-      - name: verify artifact checksum
-        working-directory: artifacts
-        run: sha256sum --check SHA256SUMS
-      - name: version, tag and npm latest gates
+      - name: Ensure npm CLI with trusted publishing support
+        run: npm install --global npm@11.6.2
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Version, tag and npm latest gates
         id: gate
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release-gate.mjs
-      - name: publish the tested tarball using OIDC
+      - name: Build
+        run: npm run build
+      # Build is explicit; do not run tests, prepare or prepack on tags.
+      - name: Publish (OIDC trusted publishing)
         env:
           DIST_TAG: ${{ steps.gate.outputs.dist-tag }}
-        run: npm publish artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$DIST_TAG" --registry https://registry.npmjs.org
-      - name: verify the registry received these exact bytes
-        run: node scripts/verify-published.mjs
+        run: npm publish --ignore-scripts --access public --provenance --tag "$DIST_TAG" --registry https://registry.npmjs.org
