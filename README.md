@@ -72,7 +72,7 @@ npm pack
 dsh plugin --profile web add ./dsh-prompt-translation-<version>.tgz
 ```
 
-也可以下载 GitHub Actions 中 `release-package` artifact，解压取得预构建安装包后执行最后一条安装命令。CI 不创建 GitHub Release。
+CI 不上传安装包或测试证据，也不创建 GitHub Release；需要本地安装包时请按上述步骤构建。
 
 ### 本地开发
 
@@ -208,11 +208,12 @@ npm run test:host -- 0.2.1-rc.2
 | `tests/pipeline.test.ts` | 用户来源过滤、消息身份、流式文本块和工具数据保护 |
 | `tests/client.test.tsx` | 配置保存、冲突重试、密钥保护、异步竞态与控件清理 |
 | `tests/loader.test.ts` | 真实 Cordis Loader 加载构建入口、翻译链路和卸载 |
-| `scripts/release-*.test.mjs` | 发布版本策略、注册表错误和安装包完整性门禁 |
+| `scripts/ci.test.mjs` | CI 矩阵、依赖版本选择、失败汇总和触发策略 |
+| `scripts/release-*.test.mjs` | 发布版本策略、标签匹配与注册表错误门禁 |
 | `scripts/browser-smoke.mjs` | 构建后的浏览器模块、按钮位置、桌面与移动视口 |
 | `scripts/full-host-smoke.mjs` | 精确版本的完整 Web 冷启动、配置重载和用户回合 |
 
-CI 在 Node 22/24 上验证，并对四个已验证 DSH 版本运行完整 Web 检查。PR、`main` 推送和手动运行只验证；`v*` 标签在所有检查通过后通过 npm OIDC 发布同一份安装包，不创建 GitHub Release；安装包与校验和保留在 Actions artifacts 中。
+CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵，每个 DSH 版本独立一个 job，选择对应 DSH/Cordis 开发依赖后依次验证 Node 22、24（复用同一份锁文件）；包含类型检查、单元及脚本测试、构建、安装包和浏览器检查，并在 Node 22 上运行完整 Web 宿主检查。Node 22 失败不会阻止 Node 24 验证，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
 
 ## 许可证
 
