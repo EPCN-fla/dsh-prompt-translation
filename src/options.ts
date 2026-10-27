@@ -24,9 +24,17 @@ export interface Options {
   timeoutMs: number
   maxChars: number
 }
+/** Quick composer choices that one Session can override independently. */
+export type QuickOptions = Pick<Options, 'enabled' | 'source' | 'target'>
+/** Complete quick-choice snapshots by DSH Session id. */
+export type SessionOverrides = Record<string, QuickOptions>
 export const defaults: Options = {
   enabled: false, source: 'auto', target: 'en', type: 'traditional',
   userPrompt: true, reasoning: false, output: false, engine: 'google',
   apiKey: '', appId: '', region: '', deeplFree: true,
   provider: '', model: '', reasoningEffort: '', timeoutMs: 60000, maxChars: 2000,
+}
+/** Project a full configuration onto the three Session-overridable fields. */
+export function quickOptions(options: Options): QuickOptions {
+  return { enabled: options.enabled, source: options.source, target: options.target }
 }

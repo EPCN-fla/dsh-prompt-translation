@@ -11,7 +11,7 @@ interface ClientContext {
   remote: { settings: SettingsApi; session?: Catalog; $on(event: string, callback: (...args: unknown[]) => void): () => void }
   slots: {
     inject(name: string, callback: () => (() => void)): () => void
-    register(options: { name: string; id: string; key?: string; order?: number; inject: () => Props }, component: typeof SettingsCard): () => void
+    register(options: { name: string; id: string; key?: string; order?: number; inject: (sessionId: string) => Props }, component: typeof SettingsCard | typeof QuickPicker): () => void
   }
 }
 
@@ -22,7 +22,7 @@ export function apply(ctx: ClientContext): void {
   const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
   const props = { api: ctx.remote.settings, catalog: ctx.remote.session, subscribe }
   ctx.effect(() => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', id: name, key: name, inject: () => props }, SettingsCard)))
-  ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: name, order: -1000, inject: () => props }, QuickPicker)))
+  ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: name, order: -1000, inject: (sessionId: string) => ({ ...props, sessionId }) }, QuickPicker)))
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.dshPromptTranslation = ''

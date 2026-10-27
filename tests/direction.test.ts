@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, markAgentLoopRequest, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { apply } from '../src/index.js'
+import { Config, readConfig, readSessionConfig } from '../src/config.js'
 import { defaults } from '../src/options.js'
 import { detectLanguage, normalizeLanguage } from '../src/direction.js'
 import { traditional } from '../src/translation.js'
@@ -113,5 +114,66 @@ it('reads a new target for the next turn and pins the current return direction d
     })
     for await (const _chunk of output) { /* consume */ }
     expect(calls.at(-1)?.system).toContain('to 简体中文.')
+  } finally { await ctx.fiber.dispose() }
+})
+
+
+it('parses persistent per-Session quick dictionaries while keeping Profile defaults separate', () => {
+  const config = Config({ sessionOverrides: { a: { enabled: true, source: 'zh', target: 'ja' } } })
+  expect(readSessionConfig(config, 'a')).toMatchObject({ enabled: true, source: 'zh', target: 'ja' })
+  expect(readSessionConfig(config, 'b')).toMatchObject({ enabled: false, source: 'auto', target: 'en' })
+  expect(readConfig(config)).not.toHaveProperty('sessionOverrides')
+  expect(() => Config({ sessionOverrides: { incomplete: { enabled: true } } } as never)).toThrow()
+})
+
+it('applies quick overrides only to their own Session, including the no-turn stream fallback', async () => {
+  const ctx = new Context()
+  const calls: GenerateOptions[] = []
+  const llm = { async *stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
+    calls.push(request)
+    const block = request.messages[0]?.content[0]
+    const text = block?.type === 'text' ? block.text : ''
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: `translated:${text}` } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  } }
+  ctx.reflect.provide('llm', llm)
+  apply(ctx, {
+    ...defaults,
+    enabled: true,
+    type: 'agent',
+    provider: 'fixture',
+    model: 'translator',
+    source: 'zh',
+    target: 'ja',
+    output: true,
+    sessionOverrides: { get: () => ({ off: { enabled: false, source: 'zh', target: 'ja' } }) },
+  })
+  const admit = async (id: string) => {
+    const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '原文' }] })
+    const decision = await ctx.waterfall('agent/pre-step', { agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+    return { message, decision }
+  }
+  const main = vi.fn(async function* (): AsyncIterable<StreamChunk> {
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  })
+  const answer = async (id: string) => {
+    const request = markAgentLoopRequest({ provider: 'fixture', model: 'main', sessionId: id as never, messages: [] })
+    const chunks = []
+    for await (const chunk of ctx.waterfall('llm/stream', request, main)) chunks.push(chunk)
+    return chunks
+  }
+  try {
+    const off = await admit('off')
+    expect(off.decision).toEqual({ kind: 'enter', messages: [off.message] })
+    expect((await answer('off'))[0]).toMatchObject({ type: 'block-end', block: { text: 'answer' } })
+    expect(calls).toHaveLength(0)
+    const on = await admit('on')
+    if (on.decision.kind !== 'enter') throw new Error('Expected enabled Session to enter')
+    expect(on.decision.messages[0]?.content[0]).toMatchObject({ type: 'text', text: 'translated:原文' })
+    const onChunks = await answer('on')
+    expect(onChunks.find(chunk => chunk.type === 'block-end')).toMatchObject({ type: 'block-end', block: { text: 'translated:answer' } })
+    expect(calls.length).toBeGreaterThan(0)
+    expect(main).toHaveBeenCalledTimes(2)
   } finally { await ctx.fiber.dispose() }
 })

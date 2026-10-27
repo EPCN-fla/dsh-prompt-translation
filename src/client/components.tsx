@@ -1,9 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { languages, defaults, type Options, type Language } from '../options.js'
-import { loadSettings, saveSettings, type Catalog, type CatalogModel, type SettingsApi } from './settings.js'
-export interface Props { api: SettingsApi; catalog?: Catalog; subscribe: (fn: () => void) => () => void }
-function useSettings({ api, subscribe }: Props) {
+import { loadSessionSettings, loadSettings, saveSessionSettings, saveSettings, type Catalog, type CatalogModel, type SettingsApi } from './settings.js'
+export interface Props { api: SettingsApi; catalog?: Catalog; sessionId?: string; subscribe: (fn: () => void) => () => void }
+function useSettings({ api, sessionId, subscribe }: Props) {
   const [value, setValue] = useState(defaults)
   const [ready, setReady] = useState(false)
   const [writable, setWritable] = useState(false)
@@ -14,7 +14,7 @@ function useSettings({ api, subscribe }: Props) {
   const refresh = async () => {
     const ticket = ++generation.current
     try {
-      const result = await loadSettings(api)
+      const result = sessionId === undefined ? await loadSettings(api) : await loadSessionSettings(api, sessionId)
       if (alive.current && ticket === generation.current) {
         setValue(result.value); setWritable(result.writable); setReady(true); setError('')
       }
@@ -31,11 +31,12 @@ function useSettings({ api, subscribe }: Props) {
     reload()
     const dispose = subscribe(reload)
     return () => { alive.current = false; generation.current++; dispose() }
-  }, [api, subscribe])
+  }, [api, sessionId, subscribe])
   const save = async (patch: Partial<Options>): Promise<boolean> => {
     setBusy(true); setError('')
     try {
-      await saveSettings(api, patch)
+      if (sessionId === undefined) await saveSettings(api, patch)
+      else await saveSessionSettings(api, sessionId, patch)
       await refresh()
       return true
     } catch (err) {
@@ -137,7 +138,7 @@ export function SettingsCard(props: Props) {
     </form>
   </section>
 }
-export function QuickPicker(props: Props) {
+export function QuickPicker(props: Props & { sessionId: string }) {
   const state = useSettings(props)
   const [open, setOpen] = useState(false)
   const [target, setTarget] = useState<HTMLElement | null>(null)
@@ -183,7 +184,7 @@ export function QuickPicker(props: Props) {
       <label><input type="checkbox" disabled={state.disabled} checked={state.value.enabled} onChange={event => { void state.save({ enabled: event.target.checked }) }} />启用翻译</label>
       <div className="dsh-pt-language-row"><LanguageSelect compact source disabled={state.disabled} value={state.value.source} onChange={source => { void state.save({ source }) }} />
       <span className="dsh-pt-arrow" aria-hidden="true">→</span><LanguageSelect compact disabled={state.disabled} value={state.value.target} onChange={target => { if (target !== 'auto') void state.save({ target }) }} />
-      </div><small className="dsh-pt-scope">* 应用到当前 Profile 的所有会话</small>
+      </div>
       {state.error && <p role="alert">{state.error}</p>}
     </div>}
   </div>

@@ -13,7 +13,7 @@ const server = createServer(async (req, res) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 let browser
 try {
-  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', headless: true, channel: process.env.CHROME_CHANNEL || undefined, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
   const page = await browser.newPage({ viewport: { width: 1100, height: 1100 } })
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`http://127.0.0.1:${server.address().port}`)
@@ -22,8 +22,13 @@ try {
   await dialog.getByLabel('原始语言').selectOption('ja')
   await dialog.getByLabel('目标语言').selectOption('zh')
   await dialog.getByLabel('启用翻译').check()
-  assert.equal(await page.evaluate(() => window.fixtureState.source), 'ja')
-  assert.equal(await page.evaluate(() => window.fixtureState.target), 'zh')
+  assert.equal(await page.evaluate(() => window.fixtureState.source), 'auto')
+  assert.equal(await page.evaluate(() => window.fixtureState.target), 'en')
+  assert.equal(await page.evaluate(() => window.fixtureState.enabled), false)
+  assert.equal(await page.evaluate(() => window.fixtureState.sessionOverrides['browser-session'].source), 'ja')
+  assert.equal(await page.evaluate(() => window.fixtureState.sessionOverrides['browser-session'].target), 'zh')
+  assert.equal(await page.evaluate(() => window.fixtureState.sessionOverrides['browser-session'].enabled), true)
+  assert.equal(await dialog.locator('.dsh-pt-scope').count(), 0)
   const position = await page.evaluate(() => {
     const permission = document.querySelector('[data-slot="conversation.input.permission"] button').getBoundingClientRect()
     const translation = document.querySelector('button[aria-label="翻译"]').getBoundingClientRect()
@@ -52,7 +57,7 @@ try {
   assert.equal(await page.locator('.dsh-pt-seat').count(), 0)
   assert.equal(await page.locator('style[data-dsh-prompt-translation]').count(), 0)
   assert.deepEqual(errors, [])
-  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'permission < translation < plan', 'quick language persistence', 'agent settings persistence', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
+  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'permission < translation < plan', 'per-session quick persistence without Profile quick writes', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
   await writeFile('artifacts/browser-result.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result))
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)) }

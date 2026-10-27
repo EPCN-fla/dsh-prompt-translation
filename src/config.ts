@@ -1,12 +1,18 @@
 import Schema from '@deepseek-ai/schemastery'
-import { languages, defaults, type Options } from './options.js'
+import { languages, defaults, type Language, type Options, type SessionOverrides } from './options.js'
 export { languages, defaults, type Options, type Language } from './options.js'
-const lang = Object.keys(languages)
+const lang = Object.keys(languages) as Language[]
+const targetLang = lang.filter((x): x is Exclude<Language, 'auto'> => x !== 'auto')
 const field = <T>(schema: Schema<T>, description: string) => schema.description(description).volatile()
+const QuickConfig = Schema.object({
+  enabled: Schema.boolean().required(),
+  source: Schema.union(lang).required(),
+  target: Schema.union(targetLang).required(),
+})
 export const Config = Schema.object({
   enabled: field(Schema.boolean().default(false), '启用翻译'),
   source: field(Schema.union(lang).default('auto'), '原始语言（自动检测）'),
-  target: field(Schema.union(lang.filter(x => x !== 'auto')).default('en'), '目标语言'),
+  target: field(Schema.union(targetLang).default('en'), '目标语言'),
   type: field(Schema.union(['traditional', 'agent']).default('traditional'), '翻译类型：传统接口 / 智能体'),
   userPrompt: field(Schema.boolean().default(true), '翻译用户提示词'),
   reasoning: field(Schema.boolean().default(false), '翻译思考内容'),
@@ -21,14 +27,27 @@ export const Config = Schema.object({
   reasoningEffort: field(Schema.string().default(''), '推理强度 ID，空值使用模型默认值'),
   timeoutMs: field(Schema.number().min(1000).max(300000).step(1).default(60000), '翻译超时（毫秒）'),
   maxChars: field(Schema.number().min(100).max(4000).step(1).default(2000), '每次翻译最大 Unicode 字符数'),
+  sessionOverrides: field(Schema.dict(QuickConfig).default({}), '每个会话独立的快捷翻译设置'),
 })
-export type LiveConfig = { [K in keyof Options]: Options[K] | { get(): Options[K] } }
+export type LiveConfig = { [K in keyof Options]: Options[K] | { get(): Options[K] | undefined } } & {
+  sessionOverrides?: SessionOverrides | { get(): SessionOverrides | undefined }
+}
 /** Read one consistent configuration snapshot for a translation operation. */
 export function readConfig(config: Partial<LiveConfig>): Options {
   const result = { ...defaults }
   for (const key of Object.keys(defaults) as (keyof Options)[]) {
     const value = config[key]
-    if (value !== undefined) Object.assign(result, { [key]: typeof value === 'object' ? value.get() : value })
+    const unwrapped = typeof value === 'object' ? value.get() : value
+    if (unwrapped !== undefined) Object.assign(result, { [key]: unwrapped })
   }
   return result
+}
+/** Resolve Profile defaults with only the addressed Session's quick choices. */
+export function readSessionConfig(config: Partial<LiveConfig>, sessionId: string): Options {
+  const result = readConfig(config)
+  const configured = config.sessionOverrides
+  const overrides = configured && typeof (configured as { get?: unknown }).get === 'function'
+    ? (configured as { get(): SessionOverrides | undefined }).get()
+    : configured as SessionOverrides | undefined
+  return { ...result, ...overrides?.[sessionId] }
 }

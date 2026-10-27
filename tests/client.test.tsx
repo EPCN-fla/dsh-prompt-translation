@@ -3,29 +3,38 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { QuickPicker, SettingsCard, type Props } from '../src/client/components.js'
-import { saveSettings, type SettingsApi } from '../src/client/settings.js'
-import { defaults } from '../src/options.js'
+import { saveSessionSettings, saveSettings, type SettingsApi } from '../src/client/settings.js'
+import { defaults, type Options, type SessionOverrides } from '../src/options.js'
 import { apply } from '../src/client/index.js'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const cleanup: (() => void)[] = []
 afterEach(async () => { await act(async () => { for (const dispose of cleanup.splice(0)) dispose() }); document.body.innerHTML = '' })
 function fixture() {
-  let current = { ...defaults }
+  const current: Partial<Options> & { sessionOverrides?: SessionOverrides } = { ...defaults }
   const api: SettingsApi = {
     describe: vi.fn<SettingsApi['describe']>(async () => ({ ok: true, value: { writable: true, namespaces: [{ ns: 'prompt-translation', value: current, revision: 1 }] } })),
-    mutate: vi.fn<SettingsApi['mutate']>(async (_ns, ops) => { for (const op of ops) Object.assign(current, { [op.path[0]!]: op.value }); return { ok: true, value: null } }),
+    mutate: vi.fn<SettingsApi['mutate']>(async (_ns, ops) => {
+      for (const op of ops) {
+        if (op.path[0] === 'sessionOverrides') {
+          const id = op.path[1]!
+          current.sessionOverrides = { ...current.sessionOverrides, [id]: op.value as SessionOverrides[string] }
+        } else Object.assign(current, { [op.path[0]!]: op.value })
+      }
+      return { ok: true, value: null }
+    }),
   }
   const listeners = new Set<() => void>()
   const props: Props = { api, subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } } }
-  return { props, api, listeners }
+  const quickProps = { ...props, sessionId: 'session-a' }
+  return { props, quickProps, current, api, listeners }
 }
 it('mounts directly after the permission slot, saves a language and cleans its portal on unload', async () => {
   document.body.innerHTML = '<div id="row"><div id="modes"><div data-slot="conversation.input.permission"><button>权限</button></div><div data-slot="conversation.input.plan"><button>计划</button></div></div><div data-slot="conversation.input.left"></div></div>'
   const fixtureState = fixture()
   const root = createRoot(document.querySelector('[data-slot="conversation.input.left"]')!)
   cleanup.push(() => root.unmount())
-  await act(async () => root.render(createElement(QuickPicker, fixtureState.props)))
+  await act(async () => root.render(createElement(QuickPicker, fixtureState.quickProps)))
   const permission = document.querySelector('[data-slot="conversation.input.permission"]')!
   expect(permission.nextElementSibling?.querySelector('[aria-label="翻译"]')).not.toBeNull()
   await act(async () => (document.querySelector('[aria-label="翻译"]') as HTMLButtonElement).click())
@@ -33,7 +42,7 @@ it('mounts directly after the permission slot, saves a language and cleans its p
   expect(source.value).toBe('auto')
   expect(document.querySelector('[aria-label="目标语言"] option[value="auto"]')).toBeNull()
   await act(async () => { source.value = 'ja'; source.dispatchEvent(new Event('change', { bubbles: true })) })
-  expect(fixtureState.api.mutate).toHaveBeenCalledWith('prompt-translation', [{ op: 'set', path: ['source'], value: 'ja' }], 1)
+  expect(fixtureState.api.mutate).toHaveBeenCalledWith('prompt-translation', [{ op: 'set', path: ['sessionOverrides', 'session-a'], value: { enabled: false, source: 'ja', target: 'en' } }], 1)
   const parent = permission.parentElement!
   await act(async () => { permission.remove(); await Promise.resolve() })
   expect(document.querySelector('.dsh-pt-seat')).toBeNull()
@@ -115,7 +124,7 @@ it('uses an icon-only toggle state and a single compact language row', async () 
   const f = fixture()
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
-  await act(async () => root.render(createElement(QuickPicker, f.props)))
+  await act(async () => root.render(createElement(QuickPicker, f.quickProps)))
   const button = host.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
   expect(button.textContent).toBe('')
   expect(button.querySelector('[data-translation-disabled]')).not.toBeNull()
@@ -123,10 +132,45 @@ it('uses an icon-only toggle state and a single compact language row', async () 
   const row = host.querySelector('.dsh-pt-language-row')!
   expect(row.querySelectorAll('select')).toHaveLength(2)
   expect([...row.querySelectorAll('label')].every(label => label.childNodes.length === 1)).toBe(true)
-  expect(host.querySelector('.dsh-pt-scope')?.textContent).toBe('* 应用到当前 Profile 的所有会话')
+  expect(host.querySelector('.dsh-pt-scope')).toBeNull()
   await act(async () => (host.querySelector('input[type=checkbox]') as HTMLInputElement).click())
   expect(button.querySelector('[data-translation-disabled]')).toBeNull()
+  expect(f.current.enabled).toBe(false)
+  expect(f.current.sessionOverrides?.['session-a']?.enabled).toBe(true)
 })
+
+it('retries a Session quick-settings conflict without changing Profile defaults', async () => {
+  const f = fixture()
+  f.api.mutate = vi.fn().mockResolvedValueOnce({ ok: false, error: { code: 'settings/conflict', message: 'conflict' } }).mockResolvedValueOnce({ ok: true, value: null })
+  await saveSessionSettings(f.api, 'session-a', { target: 'de' })
+  expect(f.api.mutate).toHaveBeenCalledTimes(2)
+  expect(f.api.mutate).toHaveBeenLastCalledWith('prompt-translation', [{ op: 'set', path: ['sessionOverrides', 'session-a'], value: { enabled: false, source: 'auto', target: 'de' } }], 1)
+  expect(f.current.target).toBe('en')
+})
+
+it('keeps quick choices independent between two conversations', async () => {
+  const f = fixture()
+  const aHost = document.createElement('div')
+  const bHost = document.createElement('div')
+  document.body.append(aHost, bHost)
+  const aRoot = createRoot(aHost)
+  const bRoot = createRoot(bHost)
+  cleanup.push(() => aRoot.unmount(), () => bRoot.unmount())
+  await act(async () => aRoot.render(createElement(QuickPicker, f.quickProps)))
+  await act(async () => bRoot.render(createElement(QuickPicker, { ...f.props, sessionId: 'session-b' })))
+  const aButton = aHost.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
+  const bButton = bHost.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
+  await act(async () => aButton.click())
+  await act(async () => (aHost.querySelector('input[type=checkbox]') as HTMLInputElement).click())
+  await act(async () => { for (const listener of f.listeners) listener() })
+  expect(f.current.enabled).toBe(false)
+  expect(f.current.sessionOverrides?.['session-a']?.enabled).toBe(true)
+  expect(f.current.sessionOverrides?.['session-b']).toBeUndefined()
+  expect(aButton.querySelector('[data-translation-disabled]')).toBeNull()
+  expect(bButton.querySelector('[data-translation-disabled]')).not.toBeNull()
+  expect(aHost.querySelector('.dsh-pt-scope')).toBeNull()
+})
+
 it('discards staged settings and collapses the themed card', async () => {
   const f = fixture()
   const host = document.createElement('div'); document.body.append(host)

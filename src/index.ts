@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { isAgentLoopRequest, type StreamChunk, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { Config, readConfig, type LiveConfig, type Options } from './config.js'
+import { Config, readConfig, readSessionConfig, type LiveConfig, type Options } from './config.js'
 import { createTranslator } from './translation.js'
 import { translatePrompts, translateStream } from './pipeline.js'
 import { detectLanguage, type ReturnLanguage } from './direction.js'
@@ -20,9 +20,9 @@ export function apply(ctx: Context, config: LiveConfig): void {
   const signalFor = (signal?: AbortSignal) => AbortSignal.any([lifecycle.signal, ...(signal ? [signal] : [])])
   ctx.on('agent/pre-step', async ({ agent, signal, step }, next) => {
     const decision = await next()
-    const options = readConfig(config)
     if (decision.kind !== 'enter') return decision
     const key = String(agent.session.id)
+    const options = readSessionConfig(config, key)
     if (!options.enabled) { turns.delete(key); return decision }
     if (!owners.has(agent)) {
       owners.add(agent)
@@ -49,8 +49,9 @@ export function apply(ctx: Context, config: LiveConfig): void {
   })
   ctx.on('llm/stream', (request, next) => {
     if (!isAgentLoopRequest(request)) return next()
-    const state = request.sessionId === undefined ? undefined : turns.get(String(request.sessionId))
-    const options = state?.options ?? readConfig(config)
+    const sessionId = request.sessionId === undefined ? undefined : String(request.sessionId)
+    const state = sessionId === undefined ? undefined : turns.get(sessionId)
+    const options = state?.options ?? (sessionId === undefined ? readConfig(config) : readSessionConfig(config, sessionId))
     if (!options.enabled) return next()
     const failure = state?.failure
     if (failure) return (async function* (): AsyncIterable<StreamChunk> {

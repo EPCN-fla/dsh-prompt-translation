@@ -19,7 +19,7 @@ export function apply(ctx, config) {
         yield { type: 'finish', reason: { kind: 'error', failure: { code: 'FIXTURE_FAILURE', message: 'test translation failure' } } }
         return
       }
-      await appendFile(config.log, JSON.stringify({ model: request.model, loop: isAgentLoopRequest(request), system: request.system, messages: request.messages }) + '\n')
+      await appendFile(config.log, JSON.stringify({ model: request.model, sessionId: request.sessionId, loop: isAgentLoopRequest(request), system: request.system, messages: request.messages }) + '\n')
       const values = request.model === 'translator'
         ? [{ type: 'text', text: request.system?.startsWith('Detect the language') ? 'zh' : request.system?.includes('to 日本語.') ? `日本語:${text}` : request.system?.includes('to English.') ? `English:${text}` : `中文:${text}` }]
         : [{ type: 'reasoning', text: 'SMOKE_THINK' }, { type: 'text', text: 'SMOKE_ANSWER' }]

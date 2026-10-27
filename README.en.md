@@ -10,7 +10,7 @@ In multilingual conversations, the language you write, the language a model gene
 2. Independently enable translation for user prompts, reasoning, and output;
 3. Use the **翻译** (Translation) menu to the right of the permission control to toggle translation and switch languages.
 
-The plugin has two halves: the Host handles translation APIs, existing-model calls, and conversation interception; the Web client contributes the settings card and quick menu. Configuration lives in the current DSH Profile's `cordis.patch.yml`, with no separate storage. Settings apply to every session in that Profile and take effect without restarting the plugin.
+The plugin has two halves: the Host handles translation APIs, existing-model calls, and conversation interception; the Web client contributes the settings card and quick menu. Configuration lives in the current DSH Profile's `cordis.patch.yml`, with no separate storage. Top-level Profile settings provide shared service configuration and defaults for new sessions; the composer quick menu stores overrides independently for each conversation and takes effect without restarting the plugin.
 
 ## Why
 
@@ -28,7 +28,7 @@ The plugin provides separate content switches without modifying the Agent loop o
 - **Independent content switches**: control user prompts, reasoning, and output separately. System prompts are never translated.
 - **Automatic language detection**: detect the source language automatically and explicitly choose a target from common language options.
 - **Traditional and model translation**: use official Baidu, Google, DeepL, or Microsoft APIs, or models already configured in DSH.
-- **Composer quick menu**: toggle translation and switch languages next to the permission control.
+- **Composer quick menu**: toggle translation and switch languages next to the permission control, persisted independently for each conversation.
 - **Persistent live settings**: save through DSH's settings service, with one read-and-retry attempt on concurrent-write conflicts.
 - **Original prompts and translation comparisons**: chat bubbles display the original prompt; user records in Trajectory show the original, the actual sent translation, and direction in both Preview and Raw. Assistant records also compare original and translated reasoning and answers.
 - **Preserved structured content**: tool arguments, tool results, injected context, images, and file blocks remain unchanged.
@@ -39,7 +39,7 @@ The correspondence matrix between plugin versions and DSH versions is as follows
 
 | Plugin version | Compatible DSH versions |
 | --- | --- |
-| 0.1.0 ~ 0.1.1 | ≥0.2.0-rc.1 <0.2.0 \|\| ≥0.2.1-rc.1 <0.2.1 |
+| 0.1.0 ~ 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.x` |
 
 All methods below add the plugin to a selected Profile (`web` in these examples). The package includes `cordis.patch.yml`, so DSH mounts the Host plugin and loads its Web client module automatically; no additional composition configuration is required.
 
@@ -88,7 +88,7 @@ Restart DSH Web and refresh the page after installation. Run `dsh --profile web 
 
 ### 1. Configure the translation method
 
-Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. Expand the translation card, choose a translation type, configure the service, then check **启用翻译** (Enable translation) and save. Use the card footer to save or discard changes.
+Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. Expand the translation card, choose a translation type, and configure the service. The card's enable and language controls are Profile defaults for new sessions and sessions without their own quick choices; saving shared service configuration does not overwrite existing per-conversation choices. Use the card footer to save or discard changes.
 
 | Traditional translation service | Required settings | API |
 | --- | --- | --- |
@@ -119,7 +119,7 @@ Identical text before and after translation does not prove that no request was m
 
 Options include Simplified Chinese, Traditional Chinese, English, Japanese, Korean, French, German, Spanish, Russian, Portuguese, Italian, Arabic, and Hindi. Actual availability depends on the provider.
 
-In an existing session, click the translation icon to the right of the permission control at the lower left of the composer. A slash indicates disabled translation; an unslashed icon indicates enabled translation. The popup places both language dropdowns on one row, separated by an arrow. Changes affect **all sessions in the current Profile**.
+In an existing session, click the translation icon to the right of the permission control at the lower left of the composer. A slash indicates disabled translation; an unslashed icon indicates enabled translation. The popup places both language dropdowns on one row, separated by an arrow. Changes affect **only the current conversation**, are persisted by DSH `sessionId`, and survive conversation switches and Host restarts. Other conversations are unchanged, and new conversations inherit the Profile defaults.
 
 ### 3. Effective timing and precedence
 
@@ -137,7 +137,7 @@ Both the settings namespace and Loader row ID are `prompt-translation`. User set
 - id: prompt-translation
   name: dsh-prompt-translation
   config:
-    enabled: true
+    enabled: false
     source: auto
     target: zh
     type: agent
@@ -149,15 +149,21 @@ Both the settings namespace and Loader row ID are `prompt-translation`. User set
     output: true
     timeoutMs: 60000
     maxChars: 2000
+    sessionOverrides:
+      <session-id>:
+        enabled: true
+        source: auto
+        target: en
 ```
 
-Replace the provider, model, and effort with supported values. Remove `reasoningEffort` to use the model default. Deployments can also seed configuration in the same plugin row's `config` field in the composition layer.
+Replace the provider, model, and effort with supported values. Remove `reasoningEffort` to use the model default. Deployments can also seed configuration in the same plugin row's `config` field in the composition layer. Each `sessionOverrides` key is an actual DSH `sessionId`, and its value is a complete `enabled` / `source` / `target` quick-settings snapshot for that conversation. Delete a conversation's entry to restore Profile default inheritance. Entries left by deleted conversations do not affect other conversations and can be removed manually.
 
 Traditional translation uses `type: traditional`, `engine` (`baidu` / `google` / `deepl` / `microsoft`), `apiKey`, and the service-specific `appId`, `region`, or `deeplFree`. Never commit real keys to the repository.
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `enabled` | `false` | Enable translation |
+| `enabled` | `false` | Default translation state for new and non-overridden sessions |
+| `sessionOverrides` | `{}` | Per-`sessionId` quick overrides for `enabled` / `source` / `target` |
 | `source` / `target` | `auto` / `en` | Source and target languages |
 | `type` / `engine` | `traditional` / `google` | Translation type and traditional service |
 | `userPrompt` / `reasoning` / `output` | `true` / `false` / `false` | Content switches |
@@ -174,9 +180,9 @@ Traditional translation uses `type: traditional`, `engine` (`baidu` / `google` /
 - Only reasoning actually returned by the provider can be translated; hidden internal reasoning is unavailable. Complete-block translation adds display latency.
 - Long text is split preferentially at whitespace, sentence, or paragraph boundaries. Traditional APIs do not guarantee verbatim code or Markdown preservation. Model instructions request preservation of code, links, and placeholders, but quality still depends on the model.
 - The quick control mounts through the official left composer slot and is positioned using the current composer's permission `data-slot` anchor. If that anchor disappears, it falls back to its original slot. Untested host versions may change the layout.
-- Full Web tests for the four tested versions use real Host services with a deterministic external model adapter. They do not prove real-provider translation quality, rate limits, billing, or signature-based continuation.
+- Full Web tests for the five tested versions use real Host services with a deterministic external model adapter. They do not prove real-provider translation quality, rate limits, billing, or signature-based continuation.
 
-Disable translation from the quick menu or disable the plugin on the Plugins page. To uninstall, run the following, restart the Profile, and refresh the page. Stored translations remain:
+Disable translation for the current conversation from the quick menu or disable the plugin on the Plugins page. To uninstall, run the following, restart the Profile, and refresh the page. Stored translations remain:
 
 ```sh
 dsh plugin --profile web remove dsh-prompt-translation
@@ -194,11 +200,11 @@ npm run pack:check
 npm run test:browser
 
 # Full Web validation: install an isolated exact-version host, then run it
-npm run host:install -- 0.2.1-rc.2
-npm run test:host -- 0.2.1-rc.2
+npm run host:install -- 0.2.1-rc.3
+npm run test:host -- 0.2.1-rc.3
 ```
 
-`npm run check` combines type checking, tests, builds, and package inspection. Build outputs live in `lib/`; packages and evidence live in `artifacts/`. Override the default Chrome executable with `CHROME_PATH`. `.npmrc` sets `legacy-peer-deps=true`; the host installation script fills required peers from exact-version manifests to avoid mixing DSH prerelease versions.
+`npm run check` combines type checking, tests, builds, and package inspection. Build outputs live in `lib/`; packages and evidence live in `artifacts/`. Override the default Chrome executable with `CHROME_PATH` and the Playwright channel with `CHROME_CHANNEL`. `.npmrc` sets `legacy-peer-deps=true`; the host installation script fills required peers from exact-version manifests to avoid mixing DSH prerelease versions.
 
 | File | Coverage |
 | --- | --- |
@@ -211,7 +217,7 @@ npm run test:host -- 0.2.1-rc.2
 | `scripts/ci.test.mjs` | CI matrix, dependency cohort selection, failure summaries, and trigger policy |
 | `scripts/release-*.test.mjs` | Version policy, tag matching, and registry-failure release gates |
 | `scripts/browser-smoke.mjs` | Built browser module, control placement, desktop and mobile viewports |
-| `scripts/full-host-smoke.mjs` | Exact-version full Web cold starts, settings reload, and a user turn |
+| `scripts/full-host-smoke.mjs` | Exact-version full Web cold starts, settings reload, two-conversation independence, and user turns |
 
 CI runs only for PRs and `v*` tag pushes, not ordinary branch pushes. PRs read the exact version matrix from `package.json` → `dshCompatibility`, with one job per DSH version. Each job selects the matching DSH/Cordis development dependencies and verifies Node 22 then 24 using the same lockfile: type checking, unit and script tests, builds, package inspection, and browser checks. Full Web host checks run on Node 22. Node 22 failures do not prevent Node 24 verification; results appear in Actions Summary. Tags independently run version gates, build, and publish through npm OIDC without tests or dependencies on PR jobs; ensure the tagged commit has passed PR checks first. Prereleases use `next`; stable releases use `latest` with rollback protection. No artifacts or GitHub Releases are uploaded; temporary packages and evidence stay on the runner.
 
