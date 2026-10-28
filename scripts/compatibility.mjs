@@ -10,7 +10,10 @@ const seams = {
   'packages/llm/llm/src/types.ts': ["type: 'text-delta'", "type: 'reasoning-delta'", "type: 'block-end'", 'replayState?: ReplayEnvelope'],
   'packages/client/ui-conversation/src/client/contract/slots.ts': ['conversation.input.left', 'conversation.input.permission'],
   'packages/client/ui-renderer/src/client/scoped-slots.tsx': ['data-slot={slotKey}'],
-  'packages/settings/settings/src/index.ts': ['revision: number', 'configure('],
+  'packages/client/ui-session/src/client/index.ts': ['sessionId: SessionId'],
+  'packages/typert/protocol/src/index.ts': ['TypertRemoteService', 'RemoteError'],
+  'packages/typert/registry/src/service.ts': ['register('],
+  'packages/client/connection/src/rpc.ts': ['ClientConnectionRpc', 'call('],
   'packages/api/session-controller/src/index.ts': ["@Remote('modelCatalog')"],
 }
 const git = args => execFileSync('git', ['-C', source, ...args], { encoding: 'utf8' }).trim()

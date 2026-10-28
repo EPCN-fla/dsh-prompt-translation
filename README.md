@@ -10,7 +10,7 @@
 2. 分别选择是否翻译用户提示词、思考内容和输出内容；
 3. 在输入框「权限」图标右侧使用「翻译」菜单，快捷启停翻译并切换语言。
 
-插件由两半组成：Host 半端负责翻译接口、已有模型调用和对话拦截；Web 客户端半端提供设置卡片和快捷菜单。配置保存在 DSH 当前 Profile 的 `cordis.patch.yml` 中，无需独立存储。设置影响该 Profile 的所有会话，修改后无需重启插件。
+插件由两半组成：Host 半端负责翻译接口、已有模型调用和对话拦截；Web 客户端半端提供设置卡片和快捷菜单。全部用户配置独立保存在 `~/.dsh/prompt-translation.yml`，文件顶层提供共享服务配置和新会话默认值；输入框快捷菜单按会话保存覆盖，修改后无需重启插件。Profile 的 `cordis.patch.yml` 仅用于插件组合和首次缺省回退，不承载用户修改。
 
 ## 为什么需要
 
@@ -28,8 +28,8 @@
 - **独立内容开关**：用户提示词、思考内容和输出内容分别控制，系统提示词不翻译。
 - **自动检测语言**：原始语言支持自动检测；目标语言明确指定，提供常用语言选项。
 - **传统翻译与智能体翻译**：支持百度、Google、DeepL、微软官方 API，以及 DSH 已配置的模型。
-- **输入框快捷菜单**：「权限」右侧的翻译按钮支持启停和语言切换。
-- **实时持久化配置**：使用 DSH 设置服务保存，并在并发写入冲突时重新读取后重试一次。
+- **输入框快捷菜单**：「权限」右侧的翻译按钮支持启停和语言切换，每个会话独立保存。
+- **独立持久化配置**：通过插件自有 API 读写独立 YAML，以 revision 检测冲突并在重读后重试一次；文件以 0600 权限原子替换。
 - **原文展示与翻译对照**：聊天气泡显示用户原文；轨迹中的用户记录可在「预览」和「原始内容」查看原文、实际发送的译文及语言方向；助手记录中的思考和回答也分别显示翻译前后内容。
 - **结构化内容保护**：工具调用参数、工具结果、注入上下文、图片和文件块保持原样。
 
@@ -39,7 +39,9 @@
 
 | 插件版本 | 适配的 DSH 版本 |
 | --- | --- |
-| 0.1.0 ~ 0.1.1 | ≥0.2.0-rc.1 <0.2.0 \|\| ≥0.2.1-rc.1 <0.2.1 |
+| 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3` |
+| 0.1.1 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
+| 0.1.0 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
 
 以下方式都将插件加入指定 Profile（以 `web` 为例）。本包包含 `cordis.patch.yml`，DSH 会自动挂载 Host 半端并加载 Web 客户端模块，无需另写组合配置。
 
@@ -88,7 +90,7 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 
 ### 1. 配置翻译方式
 
-打开「插件 → dsh-prompt-translation」。插件默认关闭翻译；展开翻译卡片，选择翻译类型、配置服务后，勾选「启用翻译」并保存。卡片底部可保存设置或放弃修改。
+打开「插件 → dsh-prompt-translation」。插件默认关闭翻译；展开翻译卡片，选择翻译类型并配置服务。卡片中的「启用翻译」和语言选项是新会话及未单独设置会话的 全局默认值；保存服务配置不会覆盖已有会话的快捷选择。卡片底部可保存设置或放弃修改。
 
 | 传统翻译服务 | 所需配置 | 接口 |
 | --- | --- | --- |
@@ -97,7 +99,7 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 | DeepL | API Key、Free / Pro 选择 | `/v2/translate` |
 | 微软 | Translator API Key、资源区域（按资源要求） | Translator v3 |
 
-密钥通过 DSH 设置接口交给 Host，由 secret 字段保存；浏览器不直接调用供应商。密钥输入框留空保留已有值，切换服务时必须填写新服务的密钥。删除凭据可在 DSH 组件配置中清空 `apiKey`。
+密钥通过插件自有 API 交给 Host 并以 0600 权限保存在独立 YAML 中；浏览器只读取脱敏值，不直接调用供应商。密钥输入框留空保留已有值，切换服务时必须填写新服务的密钥。删除凭据可将文件中的 `apiKey` 设为空字符串。
 
 选择「智能体」时，填写已有提供商 ID、模型 ID，以及可选的推理强度。候选项来自 DSH 模型目录，也支持手动填写已有 ID。推理强度必须受该模型支持，留空使用模型默认值。辅助翻译调用不提供工具，不会再次进入翻译链路，会产生额外模型请求和费用。自动回译会额外调用所选服务检测本轮用户语言；传统 API 读取检测元数据，模型模式使用独立语言检测请求。
 
@@ -119,11 +121,11 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 
 语言选项包括简体中文、繁体中文、英语、日语、韩语、法语、德语、西班牙语、俄语、葡萄牙语、意大利语、阿拉伯语和印地语；实际可用性取决于供应商。
 
-在已有会话的输入框左下角，点击「权限」右侧的翻译图标，可以快捷启停和切换语言。图标划线表示关闭，无划线表示开启；弹窗使用“语言下拉框 → 语言下拉框”单行布局。修改作用于**当前 Profile 的所有会话**。
+在已有会话的输入框左下角，点击「权限」右侧的翻译图标，可以快捷启停和切换语言。图标划线表示关闭，无划线表示开启；弹窗使用“语言下拉框 → 语言下拉框”单行布局。修改只作用于**当前会话**，按 DSH `sessionId` 持久化，切换会话或重启宿主后仍保留；其他会话不受影响，新会话继承 全局默认值。
 
 ### 3. 生效时机与优先级
 
-- 保存后，下一次用户提交读取新配置；一轮提示词与回译共用该轮的配置快照，正在生成的回答不会被后续编辑切换服务或回译语言。
+- 保存成功后，下一次用户提交读取新配置；一轮提示词与回译共用该轮的配置快照，正在生成的回答不会被后续编辑切换服务或回译语言。
 - 用户提示词在 `agent/pre-step` 阶段翻译，保留原消息 ID；历史提示词不会在后续工具步骤重复翻译。
 - 系统提示词、工具调用参数、工具结果、注入上下文、图片和文件块不参与翻译。标题生成、压缩等辅助模型调用不进入本插件的输出翻译。
 - 思考与输出在完整文本块生成后翻译，再交给 DSH 展示和持久化；启用的内容不再逐 token 展示。
@@ -131,33 +133,36 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 
 ## 配置存储格式
 
-设置命名空间和 Loader 行 ID 均为 `prompt-translation`。用户设置保存在当前 Profile 的 `cordis.patch.yml` 对应行的 `config` 中，例如：
+设置命名空间和 Loader 行 ID 均为 `prompt-translation`。全部用户设置统一保存在 `~/.dsh/prompt-translation.yml`，例如：
 
 ```yaml
-- id: prompt-translation
-  name: dsh-prompt-translation
-  config:
+enabled: false
+source: auto
+target: zh
+type: agent
+provider: your-existing-provider
+model: your-existing-model
+reasoningEffort: low
+userPrompt: false
+reasoning: true
+output: true
+timeoutMs: 60000
+maxChars: 2000
+sessionOverrides:
+  <session-id>:
     enabled: true
     source: auto
-    target: zh
-    type: agent
-    provider: your-existing-provider
-    model: your-existing-model
-    reasoningEffort: low
-    userPrompt: false
-    reasoning: true
-    output: true
-    timeoutMs: 60000
-    maxChars: 2000
+    target: en
 ```
 
-提供商、模型和推理强度需要替换成实际支持的值；使用默认推理强度时删除 `reasoningEffort`。部署方也可以在组合层同一插件行的 `config` 中预置配置。
+提供商、模型和推理强度需要替换成实际支持的值；使用默认推理强度时删除 `reasoningEffort`。部署方也可以在组合层同一插件行的 `config` 中预置静态回退配置。独立文件不存在时读取该回退；文件存在后，文件是唯一用户配置来源，所有修改都只写入该文件，不会写回 Profile。测试或启动器可通过 `DSH_HOME` 隔离此文件。`sessionOverrides` 的键是实际 DSH `sessionId`，每个条目保存该会话完整的 `enabled` / `source` / `target` 快捷快照。删除某会话的条目可让它重新继承全局默认值；已删除会话留下的条目不影响其他会话，可以手动清理。
 
 传统翻译配置使用 `type: traditional`，并填写 `engine`（`baidu` / `google` / `deepl` / `microsoft`）、`apiKey`，以及对应服务的 `appId`、`region` 或 `deeplFree`。不要将真实密钥提交到仓库。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| `enabled` | `false` | 启用翻译 |
+| `enabled` | `false` | 新会话及未覆盖会话默认是否启用翻译 |
+| `sessionOverrides` | `{}` | 按 `sessionId` 保存当前会话的 `enabled` / `source` / `target` 快捷覆盖 |
 | `source` / `target` | `auto` / `en` | 原始语言与目标语言 |
 | `type` / `engine` | `traditional` / `google` | 翻译类型与传统服务 |
 | `userPrompt` / `reasoning` / `output` | `true` / `false` / `false` | 三类内容开关 |
@@ -174,9 +179,9 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 - 只翻译供应商实际返回的思考文本，无法获取未公开的内部推理。完整块翻译会增加展示延迟。
 - 长文本优先按空白、句子或段落边界分段。传统 API 不保证代码和 Markdown 逐字不变；模型提示会要求保留代码、链接和占位符，但质量仍取决于模型。
 - 快捷按钮通过官方左侧插槽挂载，再按当前输入框的权限 `data-slot` 锚点定位；锚点缺失时回退到原插槽。其他未验证的宿主版本可能改变布局。
-- 四个已验证版本的完整 Web 测试使用真实宿主服务，仅外部模型为确定性适配器，不证明真实供应商的翻译质量、限流、账单或签名续聊。
+- 五个已验证版本的完整 Web 测试使用真实宿主服务，仅外部模型为确定性适配器，不证明真实供应商的翻译质量、限流、账单或签名续聊。
 
-可以在快捷菜单关闭翻译，或在 Plugins 页面禁用插件。卸载后重启 Profile 并刷新页面，已保存的译文会保留：
+可以在快捷菜单关闭当前会话的翻译，或在 Plugins 页面禁用插件。卸载后重启 Profile 并刷新页面，已保存的译文会保留：
 
 ```sh
 dsh plugin --profile web remove dsh-prompt-translation
@@ -194,11 +199,11 @@ npm run pack:check
 npm run test:browser
 
 # 完整 Web 验证：安装精确版本的隔离宿主，再运行
-npm run host:install -- 0.2.1-rc.2
-npm run test:host -- 0.2.1-rc.2
+npm run host:install -- 0.2.1-rc.3
+npm run test:host -- 0.2.1-rc.3
 ```
 
-`npm run check` 汇总类型检查、测试、构建和安装包检查。构建输出在 `lib/`，安装包与证据在 `artifacts/`。Chrome 默认路径可通过 `CHROME_PATH` 覆盖。`.npmrc` 使用 `legacy-peer-deps=true`，宿主安装脚本按精确版本补齐必需 peer，避免混装 DSH 预发布版本。
+`npm run check` 汇总类型检查、测试、构建和安装包检查。构建输出在 `lib/`，安装包与证据在 `artifacts/`。Chrome 默认路径可通过 `CHROME_PATH` 覆盖，Playwright channel 可通过 `CHROME_CHANNEL` 覆盖。`.npmrc` 使用 `legacy-peer-deps=true`，宿主安装脚本按精确版本补齐必需 peer，避免混装 DSH 预发布版本。
 
 | 文件 | 覆盖 |
 | --- | --- |
@@ -206,12 +211,12 @@ npm run test:host -- 0.2.1-rc.2
 | `tests/direction.test.ts` | 回译方向、供应商语言检测、会话隔离、失败保留与取消 |
 | `tests/presentation.test.ts` | 原文持久化、轨迹对照、历史消息兼容与显示适配器卸载 |
 | `tests/pipeline.test.ts` | 用户来源过滤、消息身份、流式文本块和工具数据保护 |
-| `tests/client.test.tsx` | 配置保存、冲突重试、密钥保护、异步竞态与控件清理 |
+| `tests/client.test.tsx` | 配置保存、会话独立性、冲突重试、密钥保护、异步竞态与控件清理 |
 | `tests/loader.test.ts` | 真实 Cordis Loader 加载构建入口、翻译链路和卸载 |
 | `scripts/ci.test.mjs` | CI 矩阵、依赖版本选择、失败汇总和触发策略 |
 | `scripts/release-*.test.mjs` | 发布版本策略、标签匹配与注册表错误门禁 |
 | `scripts/browser-smoke.mjs` | 构建后的浏览器模块、按钮位置、桌面与移动视口 |
-| `scripts/full-host-smoke.mjs` | 精确版本的完整 Web 冷启动、配置重载和用户回合 |
+| `scripts/full-host-smoke.mjs` | 精确版本的完整 Web 冷启动、独立 YAML 重载、双会话独立开关和用户回合 |
 
 CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵，每个 DSH 版本独立一个 job，选择对应 DSH/Cordis 开发依赖后依次验证 Node 22、24（复用同一份锁文件）；包含类型检查、单元及脚本测试、构建、安装包和浏览器检查，并在 Node 22 上运行完整 Web 宿主检查。Node 22 失败不会阻止 Node 24 验证，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
 

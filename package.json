@@ -1,6 +1,6 @@
 {
   "name": "dsh-prompt-translation",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Prompt, reasoning and response translation for DeepSeek Harness",
   "license": "MIT",
   "type": "module",
@@ -32,14 +32,18 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection"
+      ]
     }
   },
   "dshCompatibility": {
     "0.2.0-rc.1": { "cordis": "4.0.4" },
     "0.2.0-rc.2": { "cordis": "4.0.4" },
     "0.2.1-rc.1": { "cordis": "4.0.5" },
-    "0.2.1-rc.2": { "cordis": "4.0.5" }
+    "0.2.1-rc.2": { "cordis": "4.0.5" },
+    "0.2.1-rc.3": { "cordis": "4.0.5" }
   },
   "scripts": {
     "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
@@ -61,6 +65,8 @@
     "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/dsh-agent": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1",
     "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1",
+    "@deepseek-ai/dsh-typert-registry": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1",
     "@deepseek-ai/schemastery": "^3.18.4",
     "react": "^18.2.0 || ^19.0.0",
     "react-dom": "^18.2.0 || ^19.0.0"
@@ -68,8 +74,10 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/cordis-plugin-loader": "1.0.5",
-    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-rc.3",
     "@deepseek-ai/schemastery": "3.18.5",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.1",
@@ -79,10 +87,9 @@
     "playwright-core": "^1.61.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "semver": "7.7.2",
     "typescript": "^5.9.0",
-    "vitest": "^4.0.0",
-    "yaml": "^2.9.1",
-    "semver": "7.7.2"
+    "vitest": "^4.0.0"
   },
   "author": "Fla1337",
   "repository": {
@@ -102,5 +109,9 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "dependencies": {
+    "yaml": "2.9.1",
+    "zod": "4.4.3"
   }
 }
