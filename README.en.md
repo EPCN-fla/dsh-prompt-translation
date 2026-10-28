@@ -39,7 +39,9 @@ The correspondence matrix between plugin versions and DSH versions is as follows
 
 | Plugin version | Compatible DSH versions |
 | --- | --- |
-| 0.1.0 ~ 0.1.2 | ≥0.2.0-rc.1 <0.2.0 \|\| ≥0.2.1-rc.1 <0.2.1 |
+| 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3` |
+| 0.1.1 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
+| 0.1.0 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
 
 All methods below add the plugin to a selected Profile (`web` in these examples). The package includes `cordis.patch.yml`, so DSH mounts the Host plugin and loads its Web client module automatically; no additional composition configuration is required.
 
