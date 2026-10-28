@@ -39,6 +39,7 @@ The correspondence matrix between plugin versions and DSH versions is as follows
 
 | Plugin version | Compatible DSH versions |
 | --- | --- |
+| 0.1.3 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.4` |
 | 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3` |
 | 0.1.1 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
 | 0.1.0 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
@@ -199,8 +200,8 @@ npm run pack:check
 npm run test:browser
 
 # Full Web validation: install an isolated exact-version host, then run it
-npm run host:install -- 0.2.1-rc.3
-npm run test:host -- 0.2.1-rc.3
+npm run host:install -- 0.2.1-rc.4
+npm run test:host -- 0.2.1-rc.4
 ```
 
 `npm run check` combines type checking, tests, builds, and package inspection. Build outputs live in `lib/`; packages and evidence live in `artifacts/`. Override the default Chrome executable with `CHROME_PATH` and the Playwright channel with `CHROME_CHANNEL`. `.npmrc` sets `legacy-peer-deps=true`; the host installation script fills required peers from exact-version manifests to avoid mixing DSH prerelease versions.
