@@ -5,6 +5,7 @@ import { loadSessionSettings, loadSettings, saveSessionSettings, saveSettings, t
 export interface Props { api: SettingsApi; catalog?: Catalog; sessionId?: string; subscribe: (fn: () => void) => () => void }
 function useSettings({ api, sessionId, subscribe }: Props) {
   const [value, setValue] = useState(defaults)
+  const [stateSession, setStateSession] = useState<string | undefined>(undefined)
   const [ready, setReady] = useState(false)
   const [writable, setWritable] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -16,11 +17,11 @@ function useSettings({ api, sessionId, subscribe }: Props) {
     try {
       const result = sessionId === undefined ? await loadSettings(api) : await loadSessionSettings(api, sessionId)
       if (alive.current && ticket === generation.current) {
-        setValue(result.value); setWritable(result.writable); setReady(true); setError('')
+        setValue(result.value); setStateSession(sessionId); setWritable(result.writable); setReady(true); setError('')
       }
     } catch (err) {
       if (alive.current && ticket === generation.current) {
-        setReady(false); setError(err instanceof Error ? err.message : String(err))
+        setReady(false); setStateSession(sessionId); setError(err instanceof Error ? err.message : String(err))
       }
       throw err
     }
@@ -44,7 +45,8 @@ function useSettings({ api, sessionId, subscribe }: Props) {
       return false
     } finally { if (alive.current) setBusy(false) }
   }
-  return { value, ready, disabled: !ready || !writable || busy, error, save }
+  const current = stateSession === sessionId
+  return { value: current && ready ? value : defaults, ready: current && ready, disabled: !current || !ready || !writable || busy, error: current ? error : '', save }
 }
 export function LanguageSelect({ source, value, onChange, disabled, compact }: { compact?: boolean; source?: boolean; value: string; onChange: (value: Language) => void; disabled?: boolean }) {
   return <label className={compact ? 'dsh-pt-language-compact' : undefined}>{!compact && (source ? '原始语言' : '目标语言')}<select aria-label={source ? '原始语言' : '目标语言'} disabled={disabled} value={value} onChange={event => onChange(event.target.value as Language)}>

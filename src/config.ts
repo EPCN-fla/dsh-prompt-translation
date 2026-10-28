@@ -9,7 +9,7 @@ const QuickConfig = Schema.object({
   source: Schema.union(lang).required(),
   target: Schema.union(targetLang).required(),
 })
-export const Config = Schema.object({
+const fields = {
   enabled: field(Schema.boolean().default(false), '启用翻译'),
   source: field(Schema.union(lang).default('auto'), '原始语言（自动检测）'),
   target: field(Schema.union(targetLang).default('en'), '目标语言'),
@@ -27,6 +27,10 @@ export const Config = Schema.object({
   reasoningEffort: field(Schema.string().default(''), '推理强度 ID，空值使用模型默认值'),
   timeoutMs: field(Schema.number().min(1000).max(300000).step(1).default(60000), '翻译超时（毫秒）'),
   maxChars: field(Schema.number().min(100).max(4000).step(1).default(2000), '每次翻译最大 Unicode 字符数'),
+}
+export const Config = Schema.object(fields)
+export const StoredConfig = Schema.object({
+  ...fields,
   sessionOverrides: field(Schema.dict(QuickConfig).default({}), '每个会话独立的快捷翻译设置'),
 })
 export type LiveConfig = { [K in keyof Options]: Options[K] | { get(): Options[K] | undefined } } & {
@@ -42,12 +46,15 @@ export function readConfig(config: Partial<LiveConfig>): Options {
   }
   return result
 }
-/** Resolve Profile defaults with only the addressed Session's quick choices. */
-export function readSessionConfig(config: Partial<LiveConfig>, sessionId: string): Options {
-  const result = readConfig(config)
+/** Read the independent file's Session override dictionary. */
+export function readSessionOverrides(config: Partial<LiveConfig>): SessionOverrides | undefined {
   const configured = config.sessionOverrides
-  const overrides = configured && typeof (configured as { get?: unknown }).get === 'function'
+  return configured && typeof (configured as { get?: unknown }).get === 'function'
     ? (configured as { get(): SessionOverrides | undefined }).get()
     : configured as SessionOverrides | undefined
-  return { ...result, ...overrides?.[sessionId] }
+}
+/** Resolve global defaults with only the addressed Session's quick choices. */
+export function readSessionConfig(config: Partial<LiveConfig>, sessionId: string): Options {
+  const result = readConfig(config)
+  return { ...result, ...readSessionOverrides(config)?.[sessionId] }
 }

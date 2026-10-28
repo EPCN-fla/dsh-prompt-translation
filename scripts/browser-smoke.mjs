@@ -57,7 +57,7 @@ try {
   assert.equal(await page.locator('.dsh-pt-seat').count(), 0)
   assert.equal(await page.locator('style[data-dsh-prompt-translation]').count(), 0)
   assert.deepEqual(errors, [])
-  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'permission < translation < plan', 'per-session quick persistence without Profile quick writes', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
+  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'permission < translation < plan', 'per-session quick persistence without changing global quick defaults', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
   await writeFile('artifacts/browser-result.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result))
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)) }

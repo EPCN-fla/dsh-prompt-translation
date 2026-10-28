@@ -38,3 +38,6 @@ export const defaults: Options = {
 export function quickOptions(options: Options): QuickOptions {
   return { enabled: options.enabled, source: options.source, target: options.target }
 }
+
+/** One path-addressed write accepted by the independent settings API. */
+export interface SettingsPathOp { op: 'set'; path: string[]; value: unknown }

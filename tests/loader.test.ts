@@ -1,10 +1,14 @@
 import { readFile } from 'node:fs/promises'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import LlmRuntime, { createUserMessage, createSystemMessage, LlmAdapter, markAgentLoopRequest, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 
@@ -22,8 +26,12 @@ it('loads the built bundle through the real Loader and runs prompt → model →
       yield { type: 'finish', reason: { kind: 'stop' } }
     }
   }
+  const previousHome = process.env.DSH_HOME
+  const home = mkdtempSync(join(tmpdir(), 'translation-loader-home-'))
+  process.env.DSH_HOME = home
   try {
     ctx.baseUrl = pathToFileURL(resolve('cordis.patch.yml')).href
+    await ctx.plugin(TypertRegistry)
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['fixture'], new Adapter())
     await ctx.plugin(Loader)
@@ -53,5 +61,10 @@ it('loads the built bundle through the real Loader and runs prompt → model →
     const after = await ctx.waterfall('agent/pre-step', { signal: new AbortController().signal, messages: [original], turn: 2, step: 1, agent: { session: { id: 'test-session' }, ctx } as never }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [original] }))
     expect(after).toEqual({ kind: 'enter', messages: [original] })
     expect(requests).toHaveLength(3)
-  } finally { await ctx.fiber.dispose() }
+  } finally {
+    await ctx.fiber.dispose()
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
 })

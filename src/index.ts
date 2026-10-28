@@ -1,17 +1,21 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { isAgentLoopRequest, type StreamChunk, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { Config, readConfig, readSessionConfig, type LiveConfig, type Options } from './config.js'
+import { Config, type LiveConfig, type Options } from './config.js'
+import { defaultStorePath, TranslationStore } from './store.js'
+import { PromptTranslationApi, promptTranslationContribution } from './api.js'
 import { createTranslator } from './translation.js'
 import { translatePrompts, translateStream } from './pipeline.js'
 import { detectLanguage, type ReturnLanguage } from './direction.js'
 
 export const name = 'dsh-prompt-translation'
-export const inject = ['llm']
+export const inject = ['llm', 'typert']
 export { Config }
 interface TurnTranslation { options: Options; language?: ReturnLanguage; failure?: string }
 /** Register translation through the host's lifecycle-owned public waterfalls. */
-export function apply(ctx: Context, config: LiveConfig): void {
+export function apply(ctx: Context, config: LiveConfig, store = new TranslationStore(defaultStorePath(), config)): void {
+  ctx.effect(() => ctx.typert.register(promptTranslationContribution))
+  ctx.plugin(PromptTranslationApi, store)
   const lifecycle = new AbortController()
   // Session keys isolate parallel conversations; agent teardown releases their state.
   const turns = new Map<string, TurnTranslation>()
@@ -22,8 +26,7 @@ export function apply(ctx: Context, config: LiveConfig): void {
     const decision = await next()
     if (decision.kind !== 'enter') return decision
     const key = String(agent.session.id)
-    const options = readSessionConfig(config, key)
-    if (!options.enabled) { turns.delete(key); return decision }
+    const options = store.read(key)
     if (!owners.has(agent)) {
       owners.add(agent)
       agent.ctx.effect(() => () => { turns.delete(key) })
@@ -33,6 +36,7 @@ export function apply(ctx: Context, config: LiveConfig): void {
     if (!human.length) return decision
     const state: TurnTranslation = { options }
     turns.delete(key); turns.set(key, state)
+    if (!options.enabled) return decision
     try {
       if (options.reasoning || options.output) {
         const text = human.flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
@@ -51,7 +55,7 @@ export function apply(ctx: Context, config: LiveConfig): void {
     if (!isAgentLoopRequest(request)) return next()
     const sessionId = request.sessionId === undefined ? undefined : String(request.sessionId)
     const state = sessionId === undefined ? undefined : turns.get(sessionId)
-    const options = state?.options ?? (sessionId === undefined ? readConfig(config) : readSessionConfig(config, sessionId))
+    const options = state?.options ?? store.read(sessionId)
     if (!options.enabled) return next()
     const failure = state?.failure
     if (failure) return (async function* (): AsyncIterable<StreamChunk> {

@@ -77,20 +77,19 @@ it('registers both host slots and revokes styles and subscriptions on unload', (
   const f = fixture()
   const disposers: (() => void)[] = []
   const removeSlot = vi.fn()
-  const offRemote = vi.fn()
   const offReconnect = vi.fn()
   const register = vi.fn(() => removeSlot)
   apply({
     effect: fn => { const dispose = fn(); if (dispose) disposers.push(dispose) },
     on: () => offReconnect,
-    remote: { settings: f.api, $on: () => offRemote },
+    remote: {},
+    connection: { rpc: { call: vi.fn() } },
     slots: { inject: (_name, fn) => fn(), register },
   })
   expect(register.mock.calls.map(call => (call as unknown as [{ name: string }])[0].name)).toEqual(['plugins.bundle.config', 'conversation.input.left'])
   expect(document.querySelector('style[data-dsh-prompt-translation]')).not.toBeNull()
   for (const dispose of disposers.reverse()) dispose()
   expect(removeSlot).toHaveBeenCalledTimes(2)
-  expect(offRemote).toHaveBeenCalledOnce()
   expect(offReconnect).toHaveBeenCalledOnce()
   expect(document.querySelector('style[data-dsh-prompt-translation]')).toBeNull()
 })
@@ -139,7 +138,7 @@ it('uses an icon-only toggle state and a single compact language row', async () 
   expect(f.current.sessionOverrides?.['session-a']?.enabled).toBe(true)
 })
 
-it('retries a Session quick-settings conflict without changing Profile defaults', async () => {
+it('retries a Session quick-settings conflict without changing global defaults', async () => {
   const f = fixture()
   f.api.mutate = vi.fn().mockResolvedValueOnce({ ok: false, error: { code: 'settings/conflict', message: 'conflict' } }).mockResolvedValueOnce({ ok: true, value: null })
   await saveSessionSettings(f.api, 'session-a', { target: 'de' })
@@ -169,6 +168,33 @@ it('keeps quick choices independent between two conversations', async () => {
   expect(aButton.querySelector('[data-translation-disabled]')).toBeNull()
   expect(bButton.querySelector('[data-translation-disabled]')).not.toBeNull()
   expect(aHost.querySelector('.dsh-pt-scope')).toBeNull()
+})
+
+
+it('does not expose the previous conversation controls while the next one is loading', async () => {
+  const f = fixture()
+  f.current.sessionOverrides = {
+    'session-a': { enabled: true, source: 'ja', target: 'de' },
+    'session-b': { enabled: false, source: 'fr', target: 'en' },
+  }
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(QuickPicker, f.quickProps)))
+  const button = host.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
+  expect(button.getAttribute('data-enabled')).toBe('true')
+  let loadB: ((value: Awaited<ReturnType<SettingsApi['describe']>>) => void) | undefined
+  f.api.describe = vi.fn<SettingsApi['describe']>(() => new Promise(resolve => { loadB = resolve }))
+  await act(async () => root.render(createElement(QuickPicker, { ...f.props, sessionId: 'session-b' })))
+  expect(button.getAttribute('data-enabled')).toBe('false')
+  await act(async () => button.click())
+  const checkbox = host.querySelector('input[type=checkbox]') as HTMLInputElement
+  expect(checkbox.disabled).toBe(true)
+  expect(checkbox.checked).toBe(false)
+  expect((host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('auto')
+  await act(async () => loadB!({ ok: true, value: { writable: true, namespaces: [{ ns: 'prompt-translation', revision: 2, value: f.current }] } }))
+  expect(checkbox.disabled).toBe(false)
+  expect(checkbox.checked).toBe(false)
+  expect((host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('fr')
 })
 
 it('discards staged settings and collapses the themed card', async () => {

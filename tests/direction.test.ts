@@ -3,10 +3,11 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, markAgentLoopRequest, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { apply } from '../src/index.js'
-import { Config, readConfig, readSessionConfig } from '../src/config.js'
+import { StoredConfig, readConfig, readSessionConfig } from '../src/config.js'
 import { defaults } from '../src/options.js'
 import { detectLanguage, normalizeLanguage } from '../src/direction.js'
 import { traditional } from '../src/translation.js'
+import { createStorage, stubTypert } from './storage.js'
 
 it('normalizes provider detection codes without inventing unknown languages', () => {
   expect(normalizeLanguage('ZH-HANT')).toBe('zh-TW')
@@ -39,7 +40,9 @@ it('isolates return languages and preserves failed input until a terminal error 
   } }
   ctx.reflect.provide('llm', llm)
   const config = { ...defaults, enabled: true, type: 'agent' as const, target: 'ja' as const, provider: 'fixture', model: 'translator', reasoning: true, output: true }
-  apply(ctx, config)
+  const storage = createStorage(config)
+  stubTypert(ctx)
+  apply(ctx, config, storage.store)
   const admit = async (id: string, text: string) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
     const decision = await ctx.waterfall('agent/pre-step', { agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
@@ -71,7 +74,7 @@ it('isolates return languages and preserves failed input until a terminal error 
     // The next human turn clears the failure and can complete normally.
     await admit('failure', '你好')
     expect((await answer('failure')).at(-1)).toMatchObject({ reason: { kind: 'stop' } })
-  } finally { await ctx.fiber.dispose() }
+  } finally { await ctx.fiber.dispose(); storage.cleanup() }
 })
 it('rejects uncertain detection and cancels a nonresponsive detector', async () => {
   const options = { ...defaults, type: 'agent' as const, provider: 'p', model: 'm' }
@@ -86,15 +89,16 @@ it('rejects uncertain detection and cancels a nonresponsive detector', async () 
 it('reads a new target for the next turn and pins the current return direction during edits', async () => {
   const ctx = new Context()
   const calls: GenerateOptions[] = []
-  let target: 'ja' | 'en' = 'ja'
-  let source: 'zh' | 'fr' = 'zh'
   const llm = { async *stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
     calls.push(request)
     yield { type: 'block-end', index: 0, block: { type: 'text', text: request.system?.includes('to 日本語.') ? '日语' : 'English' } }
     yield { type: 'finish', reason: { kind: 'stop' } }
   } }
   ctx.reflect.provide('llm', llm)
-  apply(ctx, { ...defaults, enabled: true, type: 'agent', provider: 'fixture', model: 'translator', output: true, target: { get: () => target }, source: { get: () => source } })
+  const config = { ...defaults, enabled: true, type: 'agent' as const, provider: 'fixture', model: 'translator', output: true, target: 'ja' as const, source: 'zh' as const }
+  const storage = createStorage(config)
+  stubTypert(ctx)
+  apply(ctx, config, storage.store)
   const agent = { session: { id: 'switch' }, ctx } as never
   const admit = async (turn: number) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '你好' }] })
@@ -103,10 +107,10 @@ it('reads a new target for the next turn and pins the current return direction d
   try {
     await admit(1)
     expect(calls.at(-1)?.system).toContain('to 日本語.')
-    target = 'en'
+    storage.store.mutate([{ op: 'set', path: ['target'], value: 'en' }], storage.store.revision)
     await admit(2)
     expect(calls.at(-1)?.system).toContain('to English.')
-    source = 'fr' // A UI edit during generation must not change this turn's return language.
+    storage.store.mutate([{ op: 'set', path: ['source'], value: 'fr' }], storage.store.revision) // An edit during generation must not change this turn's return language.
     const request = markAgentLoopRequest({ provider: 'fixture', model: 'main', sessionId: 'switch' as never, messages: [] })
     const output = ctx.waterfall('llm/stream', request, async function* (): AsyncIterable<StreamChunk> {
       yield { type: 'block-end', index: 0, block: { type: 'text', text: 'reply' } }
@@ -114,16 +118,16 @@ it('reads a new target for the next turn and pins the current return direction d
     })
     for await (const _chunk of output) { /* consume */ }
     expect(calls.at(-1)?.system).toContain('to 简体中文.')
-  } finally { await ctx.fiber.dispose() }
+  } finally { await ctx.fiber.dispose(); storage.cleanup() }
 })
 
 
-it('parses persistent per-Session quick dictionaries while keeping Profile defaults separate', () => {
-  const config = Config({ sessionOverrides: { a: { enabled: true, source: 'zh', target: 'ja' } } })
+it('parses persistent per-Session quick dictionaries while keeping global defaults separate', () => {
+  const config = StoredConfig({ sessionOverrides: { a: { enabled: true, source: 'zh', target: 'ja' } } })
   expect(readSessionConfig(config, 'a')).toMatchObject({ enabled: true, source: 'zh', target: 'ja' })
   expect(readSessionConfig(config, 'b')).toMatchObject({ enabled: false, source: 'auto', target: 'en' })
   expect(readConfig(config)).not.toHaveProperty('sessionOverrides')
-  expect(() => Config({ sessionOverrides: { incomplete: { enabled: true } } } as never)).toThrow()
+  expect(() => StoredConfig({ sessionOverrides: { incomplete: { enabled: true } } } as never)).toThrow()
 })
 
 it('applies quick overrides only to their own Session, including the no-turn stream fallback', async () => {
@@ -137,17 +141,11 @@ it('applies quick overrides only to their own Session, including the no-turn str
     yield { type: 'finish', reason: { kind: 'stop' } }
   } }
   ctx.reflect.provide('llm', llm)
-  apply(ctx, {
-    ...defaults,
-    enabled: true,
-    type: 'agent',
-    provider: 'fixture',
-    model: 'translator',
-    source: 'zh',
-    target: 'ja',
-    output: true,
-    sessionOverrides: { get: () => ({ off: { enabled: false, source: 'zh', target: 'ja' } }) },
-  })
+  const config = { ...defaults, enabled: true, type: 'agent' as const, provider: 'fixture', model: 'translator', source: 'zh' as const, target: 'ja' as const, output: true }
+  const storage = createStorage(config)
+  storage.setSession('off', { enabled: false, source: 'zh', target: 'ja' })
+  stubTypert(ctx)
+  apply(ctx, config, storage.store)
   const admit = async (id: string) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '原文' }] })
     const decision = await ctx.waterfall('agent/pre-step', { agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
@@ -175,5 +173,50 @@ it('applies quick overrides only to their own Session, including the no-turn str
     expect(onChunks.find(chunk => chunk.type === 'block-end')).toMatchObject({ type: 'block-end', block: { text: 'translated:answer' } })
     expect(calls.length).toBeGreaterThan(0)
     expect(main).toHaveBeenCalledTimes(2)
-  } finally { await ctx.fiber.dispose() }
+  } finally { await ctx.fiber.dispose(); storage.cleanup() }
+})
+
+it('pins a disabled admitted turn even when translation is enabled before its main stream', async () => {
+  const ctx = new Context()
+  const calls: GenerateOptions[] = []
+  const llm = { async *stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
+    calls.push(request)
+    const block = request.messages[0]?.content[0]
+    const text = block?.type === 'text' ? block.text : ''
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: `translated:${text}` } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  } }
+  ctx.reflect.provide('llm', llm)
+  const config = { ...defaults, enabled: true, type: 'agent' as const, provider: 'fixture', model: 'translator', source: 'zh' as const, target: 'ja' as const, output: true }
+  const storage = createStorage(config)
+  storage.setSession('switch', { enabled: false, source: 'zh', target: 'ja' })
+  stubTypert(ctx)
+  apply(ctx, config, storage.store)
+  const admit = async (turn: number) => {
+    const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '原文' }] })
+    return ctx.waterfall('agent/pre-step', { agent: { session: { id: 'switch' }, ctx } as never, signal: new AbortController().signal, messages: [message], turn, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+  }
+  const main = vi.fn(async function* (): AsyncIterable<StreamChunk> {
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  })
+  const answer = async () => {
+    const request = markAgentLoopRequest({ provider: 'fixture', model: 'main', sessionId: 'switch' as never, messages: [] })
+    const chunks = []
+    for await (const chunk of ctx.waterfall('llm/stream', request, main)) chunks.push(chunk)
+    return chunks
+  }
+  try {
+    const disabled = await admit(1)
+    expect(disabled.kind).toBe('enter')
+    storage.setSession('switch', { enabled: true, source: 'zh', target: 'ja' })
+    expect((await answer())[0]).toMatchObject({ type: 'block-end', block: { text: 'answer' } })
+    expect(calls).toHaveLength(0)
+    const enabled = await admit(2)
+    if (enabled.kind !== 'enter') throw new Error('Expected newly enabled turn to enter')
+    expect(enabled.messages[0]?.content[0]).toMatchObject({ type: 'text', text: 'translated:原文' })
+    expect((await answer()).find(chunk => chunk.type === 'block-end')).toMatchObject({ type: 'block-end', block: { text: 'translated:answer' } })
+    expect(calls.length).toBeGreaterThan(0)
+    expect(main).toHaveBeenCalledTimes(2)
+  } finally { await ctx.fiber.dispose(); storage.cleanup() }
 })

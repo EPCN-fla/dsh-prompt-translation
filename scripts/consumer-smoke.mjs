@@ -1,13 +1,16 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 const root = resolve(process.argv[2] ?? '.')
 const require = createRequire(pathToFileURL(resolve(root, 'package.json')))
 const load = name => import(pathToFileURL(require.resolve(name)).href)
 const { Context } = await load('@deepseek-ai/cordis')
 const { default: Loader } = await load('@deepseek-ai/cordis-plugin-loader')
+const { default: TypertRegistry } = await load('@deepseek-ai/dsh-typert-registry')
 const { default: LlmRuntime, LlmAdapter, createUserMessage, createSystemMessage, markAgentLoopRequest } = await load('@deepseek-ai/dsh-llm')
 const { parse } = await load('yaml')
 const requests = []
@@ -23,8 +26,12 @@ class Adapter extends LlmAdapter {
   }
 }
 const ctx = new Context()
+const previousHome = process.env.DSH_HOME
+const home = await mkdtemp(join(tmpdir(), 'translation-consumer-home-'))
+process.env.DSH_HOME = home
 try {
   ctx.baseUrl = pathToFileURL(resolve(root, 'cordis.yml')).href
+  await ctx.plugin(TypertRegistry)
   await ctx.plugin(LlmRuntime)
   ctx.llm.registerAdapter(['fixture'], new Adapter())
   await ctx.plugin(Loader)
@@ -50,4 +57,9 @@ try {
   assert.deepEqual(after.messages, [original])
   const version = JSON.parse(await readFile(require.resolve('@deepseek-ai/dsh-llm/package.json'), 'utf8')).version
   console.log(JSON.stringify({ version, result: 'pass', evidence: ['packed entry', 'real Loader', 'real LlmRuntime', 'human prompt translation', 'unchanged system', 'output translation', 'no recursion', 'unload'], limitation: 'No complete DSH application/Profile boot or credentialed provider request' }))
-} finally { await ctx.fiber.dispose() }
+} finally {
+  await ctx.fiber.dispose()
+  if (previousHome === undefined) delete process.env.DSH_HOME
+  else process.env.DSH_HOME = previousHome
+  await rm(home, { recursive: true, force: true })
+}

@@ -1,14 +1,15 @@
-import { defaults, quickOptions, type Options, type QuickOptions, type SessionOverrides } from '../options.js'
+import { defaults, quickOptions, type Options, type QuickOptions, type SessionOverrides, type SettingsPathOp } from '../options.js'
 export const namespace = 'prompt-translation'
-type Reply<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
+export type Reply<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
+export type DescribeReply = Reply<{ namespaces: Namespace[]; writable: boolean }>
 export interface Namespace {
   ns: string
   value: Partial<Options> & { sessionOverrides?: SessionOverrides }
   revision: number
 }
 export interface SettingsApi {
-  describe(): Promise<Reply<{ namespaces: Namespace[]; writable: boolean }>>
-  mutate(ns: string, ops: { op: 'set'; path: string[]; value: unknown }[], revision: number): Promise<Reply<unknown>>
+  describe(): Promise<DescribeReply>
+  mutate(ns: string, ops: SettingsPathOp[], revision: number): Promise<Reply<unknown>>
 }
 export interface CatalogModel { id: string; name: string; reasoning?: { efforts: { id: string; name: string }[] } }
 export interface Catalog {
@@ -32,12 +33,12 @@ export async function loadSettings(api: SettingsApi): Promise<{ value: Options; 
   const snapshot = await readSnapshot(api)
   return { value: snapshot.value, writable: snapshot.writable }
 }
-/** Read Profile defaults with only this Session's complete quick snapshot. */
+/** Read global defaults with only this Session's complete quick snapshot. */
 export async function loadSessionSettings(api: SettingsApi, sessionId: string): Promise<{ value: Options; writable: boolean }> {
   const snapshot = await readSnapshot(api)
   return { value: { ...snapshot.value, ...snapshot.overrides[sessionId] }, writable: snapshot.writable }
 }
-/** Patch only edited Profile fields, retrying once against a fresh revision. */
+/** Patch only edited global fields, retrying once against a fresh revision. */
 export async function saveSettings(api: SettingsApi, patch: Partial<Options>): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const snapshot = await readSnapshot(api)

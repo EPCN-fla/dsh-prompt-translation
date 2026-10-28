@@ -2,7 +2,7 @@ import { waitForCompletedTurns, hostTurnDiagnostics } from './host-turn-state.mj
 import { readCompatibility } from './ci-compatibility.mjs'
 import { chromium } from 'playwright-core'
 import { spawn, execFileSync } from 'node:child_process'
-import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, copyFile, rm, stat } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parse, stringify } from 'yaml'
@@ -18,6 +18,8 @@ const cli = join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 const profile = join(home, 'profiles/translation-smoke')
 const env = { ...process.env, DSH_HOME: home }
 await mkdir(home, { recursive: true })
+const storePath = join(home, 'prompt-translation.yml')
+await rm(storePath, { force: true })
 const actual = JSON.parse(await readFile(join(root,'node_modules/@deepseek-ai/dsh/package.json'),'utf8')).version
 assert.equal(actual, version)
 if (!existsSync(join(profile,'package.json'))) execFileSync(process.execPath,[cli,'--profile','translation-smoke','--from-default-profile','web','--dump-config'],{env,stdio:['ignore','ignore','pipe'],timeout:60000})
@@ -74,8 +76,8 @@ try {
  await page.getByRole('button',{name:'保存设置',exact:true}).click()
  await wait(400)
  for (let attempt = 0; ; attempt++) {
-  const saved = parse(await readFile(join(profile,'cordis.patch.yml'),'utf8'))
-  if (saved.find(row=>row.id==='prompt-translation').config.source === 'ja') break
+  const saved = parse(await readFile(storePath,'utf8'))
+  if (saved.source === 'ja') break
   if (attempt === 40) throw new Error('Settings were not persisted')
   await wait(100)
  }
@@ -217,14 +219,19 @@ try {
  assert.ok(calls.some(call=>call.model==='translator'&&call.system?.includes('to 简体中文.')&&call.messages.some(m=>m.content.some(b=>b.text==='SMOKE_THINK'))))
  assert.ok(calls.some(call=>call.model==='translator'&&call.system?.includes('to 简体中文.')&&call.messages.some(m=>m.content.some(b=>b.text==='SMOKE_ANSWER'))))
  assert.ok(!calls.filter(call=>call.model==='translator').some(call=>call.messages.some(m=>m.role==='system')))
- const savedConfig=parse(await readFile(join(profile,'cordis.patch.yml'),'utf8')).find(row=>row.id==='prompt-translation').config
+ const savedConfig=parse(await readFile(storePath,'utf8'))
  assert.equal(savedConfig.enabled,false)
  assert.equal(savedConfig.sessionOverrides[main.sessionId].enabled,true)
  assert.equal(savedConfig.sessionOverrides[main.sessionId].target,'en')
  assert.equal(savedConfig.sessionOverrides[bMain.sessionId],undefined)
+ assert.equal((await stat(storePath)).mode & 0o777,0o600)
+ const profileConfig=parse(await readFile(join(profile,'cordis.patch.yml'),'utf8')).find(row=>row.id==='prompt-translation').config
+ assert.equal(profileConfig.enabled,false)
+ assert.equal(profileConfig.source,'auto')
+ assert.equal(profileConfig.sessionOverrides,undefined)
  assert.deepEqual(errors,[])
  assert.ok(resources.some(r=>r.status===200))
- const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','real settings persisted and reload verified','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
+ const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
  await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 }catch(error){
  const state = await page?.evaluate(hostTurnDiagnostics).catch(()=>undefined)

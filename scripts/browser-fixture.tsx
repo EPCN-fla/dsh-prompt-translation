@@ -31,7 +31,12 @@ Object.assign(window, {
     plugin.apply({
       effect(fn: () => (() => void) | undefined) { const dispose = fn(); if (dispose) disposers.push(dispose) },
       on() { return () => {} },
-      remote: { settings, session: { async modelCatalog() { return { ok: true, value: { groups: [{ id: 'existing-provider', name: 'Existing provider', models: [{ id: 'existing-model', name: 'Existing model', reasoning: { efforts: [{ id: 'low', name: 'Low' }] } }] }] } } } }, $on(_event: string, listener: (ns: string) => void) { listeners.add(listener); return () => listeners.delete(listener) } },
+      remote: { session: { async modelCatalog() { return { ok: true, value: { groups: [{ id: 'existing-provider', name: 'Existing provider', models: [{ id: 'existing-model', name: 'Existing model', reasoning: { efforts: [{ id: 'low', name: 'Low' }] } }] }] } } } } },
+      connection: { rpc: { async call(_channel: string, endpoint: string, payload: { args: { ns?: string; ops?: { path: string[]; value: unknown }[]; revision?: number } }) {
+        if (endpoint === 'promptTranslation/describe') return settings.describe()
+        if (endpoint === 'promptTranslation/mutate') return settings.mutate(payload.args.ns!, payload.args.ops!, payload.args.revision!)
+        throw new Error(`Unexpected endpoint: ${endpoint}`)
+      } } },
       slots: {
         inject(_name: string, fn: () => () => void) { return fn() },
         register(options: { name: string; inject: (sessionId?: string) => unknown }, Component: React.ComponentType<any>) {
