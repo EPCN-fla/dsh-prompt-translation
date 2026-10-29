@@ -39,6 +39,7 @@
 
 | 插件版本 | 适配的 DSH 版本 |
 | --- | --- |
+| 0.1.3 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.4` |
 | 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3` |
 | 0.1.1 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
 | 0.1.0 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
@@ -199,8 +200,8 @@ npm run pack:check
 npm run test:browser
 
 # 完整 Web 验证：安装精确版本的隔离宿主，再运行
-npm run host:install -- 0.2.1-rc.3
-npm run test:host -- 0.2.1-rc.3
+npm run host:install -- 0.2.1-rc.4
+npm run test:host -- 0.2.1-rc.4
 ```
 
 `npm run check` 汇总类型检查、测试、构建和安装包检查。构建输出在 `lib/`，安装包与证据在 `artifacts/`。Chrome 默认路径可通过 `CHROME_PATH` 覆盖，Playwright channel 可通过 `CHROME_CHANNEL` 覆盖。`.npmrc` 使用 `legacy-peer-deps=true`，宿主安装脚本按精确版本补齐必需 peer，避免混装 DSH 预发布版本。
