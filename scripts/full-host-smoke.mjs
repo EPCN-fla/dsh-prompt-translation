@@ -71,6 +71,12 @@ try {
  await page.getByRole('button',{name:'Plugins',exact:true}).click()
  await page.getByRole('button',{name:'View dsh-prompt-translation',exact:true}).click()
  await page.getByRole('heading',{name:'提示词与输出翻译'}).waitFor()
+ const settingsCard=page.locator('.dsh-pt-card')
+ assert.equal(await settingsCard.locator('form').isVisible(),true)
+ assert.equal(await settingsCard.locator('.dsh-pt-card-header button').count(),0)
+ await settingsCard.locator('.dsh-pt-card-header').click()
+ assert.equal(await settingsCard.locator('form').isVisible(),true)
+
  assert.match(await page.locator('body').innerText(),/Running/)
  await page.getByLabel('原始语言',{exact:true}).selectOption('ja')
  await page.getByRole('button',{name:'保存设置',exact:true}).click()
@@ -231,7 +237,7 @@ try {
  assert.equal(profileConfig.sessionOverrides,undefined)
  assert.deepEqual(errors,[])
  assert.ok(resources.some(r=>r.status===200))
- const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
+ const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','settings card fixed expanded on the real Plugins page','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
  await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 }catch(error){
  const state = await page?.evaluate(hostTurnDiagnostics).catch(()=>undefined)
