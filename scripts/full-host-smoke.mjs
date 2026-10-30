@@ -68,8 +68,18 @@ try {
  page.on('response',r=>{if(r.url().includes('dsh-prompt-translation'))resources.push({path:new URL(r.url()).pathname,status:r.status()})})
  await page.goto(url)
  await wait(1500);await dismiss()
+ const expectedIcon=`data:image/svg+xml;base64,${(await readFile('icon.svg')).toString('base64')}`
+ const checkIcon=async selector=>{
+  const image=page.locator(`${selector} img`).first()
+  await image.waitFor()
+  assert.equal(await image.getAttribute('src'),expectedIcon)
+  await image.evaluate(async node=>{await node.decode()})
+  assert.ok(await image.evaluate(node=>node.naturalWidth>0))
+ }
  await page.getByRole('button',{name:'Plugins',exact:true}).click()
+ await checkIcon('[data-plugin-package="dsh-prompt-translation"]')
  await page.getByRole('button',{name:'View dsh-prompt-translation',exact:true}).click()
+ await checkIcon('[data-plugin-detail]')
  await page.getByRole('heading',{name:'提示词与输出翻译'}).waitFor()
  const settingsCard=page.locator('.dsh-pt-card')
  assert.equal(await settingsCard.locator('form').isVisible(),true)
@@ -237,7 +247,7 @@ try {
  assert.equal(profileConfig.sessionOverrides,undefined)
  assert.deepEqual(errors,[])
  assert.ok(resources.some(r=>r.status===200))
- const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','settings card fixed expanded on the real Plugins page','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
+ const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','manifest SVG icon decoded on plugin card and detail','settings card fixed expanded on the real Plugins page','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
  await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 }catch(error){
  const state = await page?.evaluate(hostTurnDiagnostics).catch(()=>undefined)

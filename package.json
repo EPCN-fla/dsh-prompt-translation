@@ -2,6 +2,7 @@
   "name": "dsh-prompt-translation",
   "version": "0.1.3",
   "description": "Prompt, reasoning and response translation for DeepSeek Harness",
+  "icon": "./icon.svg",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -20,6 +21,7 @@
   },
   "files": [
     "lib/",
+    "icon.svg",
     "cordis.patch.yml",
     "dsh-plugin.naming.json",
     "README.md",
