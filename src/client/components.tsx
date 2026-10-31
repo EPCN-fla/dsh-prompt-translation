@@ -55,8 +55,6 @@ export function LanguageSelect({ source, value, onChange, disabled, compact }: {
 }
 export function SettingsCard(props: Props) {
   const state = useSettings(props)
-  const [expanded, setExpanded] = useState(true)
-  const cardId = useId()
   const catalogId = useId()
   const { value, save, disabled } = state
   const [patch, setPatch] = useState<Partial<Options>>({})
@@ -101,13 +99,12 @@ export function SettingsCard(props: Props) {
     if (changes.apiKey === '') delete changes.apiKey
     void save(changes).then(ok => { if (ok) setPatch({}) })
   }
-  return <section className={`dsh-pt-card${expanded ? ' dsh-pt-card-open' : ''}`}>
-    <button type="button" className="dsh-pt-card-header" aria-expanded={expanded} aria-controls={cardId} onClick={() => setExpanded(!expanded)}>
+  return <section className="dsh-pt-card dsh-pt-card-open">
+    <div className="dsh-pt-card-header">
       <span className="dsh-pt-head-text"><span role="heading" aria-level={3} className="dsh-pt-card-name">提示词与输出翻译</span><span className="dsh-pt-card-description">输入译向目标语言，思考与回答译回原始语言。</span></span>
       {dirty && <span className="dsh-pt-tag">未保存</span>}
-      <svg className={expanded ? 'dsh-pt-chevron dsh-pt-chevron-open' : 'dsh-pt-chevron'} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-    </button>
-    <form id={cardId} className="dsh-pt-card-body" hidden={!expanded} onSubmit={event => { event.preventDefault(); submit() }}>
+    </div>
+    <form className="dsh-pt-card-body" onSubmit={event => { event.preventDefault(); submit() }}>
     <fieldset disabled={disabled} className="dsh-pt-fields">
       <label><input type="checkbox" checked={draft.enabled} onChange={event => edit('enabled', event.target.checked)} />启用翻译</label>
       <div className="dsh-pt-row"><LanguageSelect source value={draft.source} onChange={next => edit('source', next)} /><span>→</span><LanguageSelect value={draft.target} onChange={next => { if (next !== 'auto') edit('target', next) }} /></div>

@@ -17,6 +17,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 1100 } })
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`http://127.0.0.1:${server.address().port}`)
+  const settingsCard = page.locator('.dsh-pt-card')
+  assert.equal(await settingsCard.locator('form').isVisible(), true)
+  assert.equal(await settingsCard.locator('.dsh-pt-card-header button').count(), 0)
+  await settingsCard.locator('.dsh-pt-card-header').click()
+  assert.equal(await settingsCard.locator('form').isVisible(), true)
   await page.getByRole('button', { name: '翻译', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '快捷翻译设置' })
   await dialog.getByLabel('原始语言').selectOption('ja')
@@ -57,7 +62,7 @@ try {
   assert.equal(await page.locator('.dsh-pt-seat').count(), 0)
   assert.equal(await page.locator('style[data-dsh-prompt-translation]').count(), 0)
   assert.deepEqual(errors, [])
-  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'permission < translation < plan', 'per-session quick persistence without changing global quick defaults', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
+  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'settings card fixed expanded without collapse control', 'permission < translation < plan', 'per-session quick persistence without changing global quick defaults', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
   await writeFile('artifacts/browser-result.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result))
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)) }

@@ -54,6 +54,20 @@ it('mounts directly after the permission slot, saves a language and cleans its p
   expect(document.querySelector('.dsh-pt-seat')).toBeNull()
   expect(fixtureState.listeners.size).toBe(0)
 })
+it('keeps plugin settings expanded without a collapse control', async () => {
+  const f = fixture()
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(SettingsCard, f.props)))
+  const header = host.querySelector('.dsh-pt-card-header') as HTMLElement
+  const form = host.querySelector('form')!
+  expect(header.tagName).toBe('DIV')
+  expect(header.querySelector('button')).toBeNull()
+  expect(header.querySelector('svg')).toBeNull()
+  expect(form.hidden).toBe(false)
+  await act(async () => header.click())
+  expect(form.hidden).toBe(false)
+})
 it('retains edited configuration and displays failure when saving is rejected', async () => {
   const f = fixture()
   f.api.mutate = vi.fn<SettingsApi['mutate']>(async () => ({ ok: false, error: { code: 'denied', message: '保存被拒绝' } }))
@@ -197,7 +211,7 @@ it('does not expose the previous conversation controls while the next one is loa
   expect((host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('fr')
 })
 
-it('discards staged settings and collapses the themed card', async () => {
+it('discards staged settings in the expanded themed card', async () => {
   const f = fixture()
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
@@ -208,6 +222,5 @@ it('discards staged settings and collapses the themed card', async () => {
   await act(async () => (host.querySelector('.dsh-pt-card-footer button[type=button]') as HTMLButtonElement).click())
   expect(select.value).toBe('auto')
   expect(host.querySelector('.dsh-pt-tag')).toBeNull()
-  await act(async () => (host.querySelector('.dsh-pt-card-header') as HTMLButtonElement).click())
-  expect((host.querySelector('.dsh-pt-card-body') as HTMLElement).hidden).toBe(true)
+  expect((host.querySelector('.dsh-pt-card-body') as HTMLElement).hidden).toBe(false)
 })

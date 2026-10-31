@@ -37,12 +37,13 @@ The plugin provides separate content switches without modifying the Agent loop o
 
 The correspondence matrix between plugin versions and DSH versions is as follows:
 
-| Plugin version | Compatible DSH versions |
-| --- | --- |
-| 0.1.3 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3 / 0.2.1-rc.4` |
-| 0.1.2 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2 / 0.2.1-rc.3` |
-| 0.1.1 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
-| 0.1.0 | `0.2.0-rc.x / 0.2.1-rc.1 / 0.2.1-rc.2` |
+| Plugin version | Minimum compatible DSH version | Highest compatible DSH version |
+| --- | --- | --- |
+| 0.1.4 | 0.2.0-rc.1 | 0.2.1-rc.5 |
+| 0.1.3 | 0.2.0-rc.1 | 0.2.1-rc.4 |
+| 0.1.2 | 0.2.0-rc.1 | 0.2.1-rc.3 |
+| 0.1.1 | 0.2.0-rc.1 | 0.2.1-rc.2 |
+| 0.1.0 | 0.2.0-rc.1 | 0.2.1-rc.2 |
 
 All methods below add the plugin to a selected Profile (`web` in these examples). The package includes `cordis.patch.yml`, so DSH mounts the Host plugin and loads its Web client module automatically; no additional composition configuration is required.
 
@@ -91,7 +92,7 @@ Restart DSH Web and refresh the page after installation. Run `dsh --profile web 
 
 ### 1. Configure the translation method
 
-Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. Expand the translation card, choose a translation type, and configure the service. The card's enable and language controls are global defaults for new sessions and sessions without their own quick choices; saving shared service configuration does not overwrite existing per-conversation choices. Use the card footer to save or discard changes.
+Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. The translation card stays expanded, so you can directly choose a translation type and configure the service. The card's enable and language controls are global defaults for new sessions and sessions without their own quick choices; saving shared service configuration does not overwrite existing per-conversation choices. Use the card footer to save or discard changes.
 
 | Traditional translation service | Required settings | API |
 | --- | --- | --- |
@@ -180,7 +181,7 @@ Traditional translation uses `type: traditional`, `engine` (`baidu` / `google` /
 - Only reasoning actually returned by the provider can be translated; hidden internal reasoning is unavailable. Complete-block translation adds display latency.
 - Long text is split preferentially at whitespace, sentence, or paragraph boundaries. Traditional APIs do not guarantee verbatim code or Markdown preservation. Model instructions request preservation of code, links, and placeholders, but quality still depends on the model.
 - The quick control mounts through the official left composer slot and is positioned using the current composer's permission `data-slot` anchor. If that anchor disappears, it falls back to its original slot. Untested host versions may change the layout.
-- Full Web tests for the five tested versions use real Host services with a deterministic external model adapter. They do not prove real-provider translation quality, rate limits, billing, or signature-based continuation.
+- Full Web tests for the six tested versions use real Host services with a deterministic external model adapter. They do not prove real-provider translation quality, rate limits, billing, or signature-based continuation.
 
 Disable translation for the current conversation from the quick menu or disable the plugin on the Plugins page. To uninstall, run the following, restart the Profile, and refresh the page. Stored translations remain:
 
@@ -200,8 +201,8 @@ npm run pack:check
 npm run test:browser
 
 # Full Web validation: install an isolated exact-version host, then run it
-npm run host:install -- 0.2.1-rc.4
-npm run test:host -- 0.2.1-rc.4
+npm run host:install -- 0.2.1-rc.5
+npm run test:host -- 0.2.1-rc.5
 ```
 
 `npm run check` combines type checking, tests, builds, and package inspection. Build outputs live in `lib/`; packages and evidence live in `artifacts/`. Override the default Chrome executable with `CHROME_PATH` and the Playwright channel with `CHROME_CHANNEL`. `.npmrc` sets `legacy-peer-deps=true`; the host installation script fills required peers from exact-version manifests to avoid mixing DSH prerelease versions.
