@@ -182,7 +182,7 @@ sessionOverrides:
 - 只翻译供应商实际返回的思考文本，无法获取未公开的内部推理。完整块翻译会增加展示延迟。
 - 长文本优先按空白、句子或段落边界分段。传统 API 不保证代码和 Markdown 逐字不变；模型提示会要求保留代码、链接和占位符，但质量仍取决于模型。
 - 快捷按钮通过官方左侧插槽挂载，再按当前输入框的权限 `data-slot` 锚点定位；锚点缺失时回退到原插槽。其他未验证的宿主版本可能改变布局。
-- 七个已验证版本的完整 Web 测试使用真实宿主服务，仅外部模型为确定性适配器，不证明真实供应商的翻译质量、限流、账单或签名续聊。
+- 所有声明版本的完整 Web 测试使用真实宿主服务，仅外部模型为确定性适配器，不证明真实供应商的翻译质量、限流、账单或签名续聊。
 
 可以在快捷菜单关闭当前会话的翻译，或在 Plugins 页面禁用插件。卸载后重启 Profile 并刷新页面，已保存的译文会保留：
 
@@ -221,7 +221,7 @@ npm run test:host -- 0.2.2-rc.1
 | `scripts/browser-smoke.mjs` | 构建后的浏览器模块、按钮位置、桌面与移动视口 |
 | `scripts/full-host-smoke.mjs` | 精确版本的完整 Web 冷启动、独立 YAML 重载、双会话独立开关和用户回合 |
 
-CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵，每个 DSH 版本独立一个 job，选择对应 DSH/Cordis 开发依赖后依次验证 Node 22、24（复用同一份锁文件）；包含类型检查、单元及脚本测试、构建、安装包和浏览器检查，并对旧版本在 Node 22 上运行完整 Web 宿主检查；DSH 0.2.2-rc.1 要求 Node >=24.9.0，其完整 Web 宿主检查在 Node 24 上运行。Node 22 失败不会阻止 Node 24 验证，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
+CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵，每个 DSH 版本独立一个 job，选择完整的 DSH/Cordis/Loader/Schemastery 开发 cohort 和初始 Node 版本。旧版本在 Node 22 完成首轮验证及完整 Web 宿主检查，再复用同一锁文件执行 Node 24 验证；DSH 0.2.2-rc.1 从首次安装起仅使用 Node 24（>=24.9.0），不经过 Node 22。验证包含类型检查、单元及脚本测试、构建、安装包和浏览器检查，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
 
 ## 许可证
 
