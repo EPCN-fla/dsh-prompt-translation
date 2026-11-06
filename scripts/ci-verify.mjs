@@ -21,6 +21,7 @@ if (mode === 'summary') {
     lines.push(`| ${report?.node ?? node} | ${process.env[`SETUP_${node}`] ?? 'unknown'} | ${process.env[`VERIFY_${node}`] ?? 'unknown'} | ${status('install')} | ${status('typecheck')} | ${status('test')} | ${status('scripts')} | ${status('build')} | ${status('package')} | ${status('browser')} |`)
   }
   lines.push('', `Node 22 exact-host smoke: **${process.env.SMOKE_RESULT ?? 'not run'}**.`,
+    `Node 24 exact-host smoke: **${process.env.SMOKE24_RESULT ?? 'not run'}**.`,
     '', 'Logs and temporary tarballs stay on the runner; no artifacts or GitHub Release are uploaded.', '')
   const text = lines.join('\n')
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text)

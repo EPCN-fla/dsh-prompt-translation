@@ -9,6 +9,9 @@ import { detectLanguage, normalizeLanguage } from '../src/direction.js'
 import { traditional } from '../src/translation.js'
 import { createStorage, stubTypert } from './storage.js'
 
+// A spread supplies the 0.2.2 field without excess-property errors on older cohorts.
+const targetModelSelection = { modelSelection: { provider: 'fixture', model: 'main' } }
+
 it('normalizes provider detection codes without inventing unknown languages', () => {
   expect(normalizeLanguage('ZH-HANT')).toBe('zh-TW')
   expect(normalizeLanguage('jp')).toBe('ja')
@@ -45,7 +48,7 @@ it('isolates return languages and preserves failed input until a terminal error 
   apply(ctx, config, storage.store)
   const admit = async (id: string, text: string) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
-    const decision = await ctx.waterfall('agent/pre-step', { agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+    const decision = await ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
     return { message, decision }
   }
   const main = vi.fn(async function* (): AsyncIterable<StreamChunk> {
@@ -102,7 +105,7 @@ it('reads a new target for the next turn and pins the current return direction d
   const agent = { session: { id: 'switch' }, ctx } as never
   const admit = async (turn: number) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '你好' }] })
-    return ctx.waterfall('agent/pre-step', { agent, signal: new AbortController().signal, messages: [message], turn, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+    return ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent, signal: new AbortController().signal, messages: [message], turn, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
   }
   try {
     await admit(1)
@@ -148,7 +151,7 @@ it('applies quick overrides only to their own Session, including the no-turn str
   apply(ctx, config, storage.store)
   const admit = async (id: string) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '原文' }] })
-    const decision = await ctx.waterfall('agent/pre-step', { agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+    const decision = await ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent: { session: { id }, ctx } as never, signal: new AbortController().signal, messages: [message], turn: 1, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
     return { message, decision }
   }
   const main = vi.fn(async function* (): AsyncIterable<StreamChunk> {
@@ -194,7 +197,7 @@ it('pins a disabled admitted turn even when translation is enabled before its ma
   apply(ctx, config, storage.store)
   const admit = async (turn: number) => {
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '原文' }] })
-    return ctx.waterfall('agent/pre-step', { agent: { session: { id: 'switch' }, ctx } as never, signal: new AbortController().signal, messages: [message], turn, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
+    return ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent: { session: { id: 'switch' }, ctx } as never, signal: new AbortController().signal, messages: [message], turn, step: 1 }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
   }
   const main = vi.fn(async function* (): AsyncIterable<StreamChunk> {
     yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer' } }

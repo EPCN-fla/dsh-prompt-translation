@@ -58,10 +58,12 @@ test('verification records failures, continues independent checks and summarizes
   let report = JSON.parse(readFileSync(join(root, `artifacts/ci/node-${major}.json`)))
   assert.equal(report.steps.find(s => s.name === 'typecheck').status, 'failed')
   assert.equal(report.steps.find(s => s.name === 'browser').status, 'passed')
-  const summary = run(root, 'ci-verify.mjs', ['summary'], env)
+  const summary = run(root, 'ci-verify.mjs', ['summary'], { ...env, SMOKE_RESULT: 'success', SMOKE24_RESULT: 'success' })
   assert.equal(summary.status, 0, summary.stderr)
   assert.match(summary.stdout, /failed/)
   assert.match(summary.stdout, /not run/)
+  assert.match(summary.stdout, /Node 22 exact-host smoke: \*\*success\*\*/)
+  assert.match(summary.stdout, /Node 24 exact-host smoke: \*\*success\*\*/)
   const installFailure = run(root, 'ci-verify.mjs', ['verify', major], { ...env, FAIL_STEP: 'ci' })
   assert.equal(installFailure.status, 1)
   report = JSON.parse(readFileSync(join(root, `artifacts/ci/node-${major}.json`)))
@@ -77,6 +79,8 @@ test('workflow isolates PR validation from tag-only publishing with no artifact 
   assert.match(steps.find(s => s.id === 'verify24').if, /!cancelled\(\)/)
   assert.doesNotMatch(steps.find(s => s.id === 'verify24').if, /verify22|smoke/)
   assert.equal(steps.find(s => s.name === 'Test summary').if, 'always()')
+  assert.match(steps.find(s => s.id === 'smoke').if, /verify22.*matrix\.dsh-version != '0\.2\.2-rc\.1'/)
+  assert.match(steps.find(s => s.id === 'smoke24').if, /verify24.*matrix\.dsh-version == '0\.2\.2-rc\.1'/)
   for (const job of Object.values(workflow.jobs)) {
     assert.ok(job.steps.every(s => !s.uses?.includes('artifact')))
   }
