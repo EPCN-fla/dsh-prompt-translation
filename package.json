@@ -41,14 +41,14 @@
     }
   },
   "dshCompatibility": {
-    "0.2.0-rc.1": { "cordis": "4.0.4" },
-    "0.2.0-rc.2": { "cordis": "4.0.4" },
-    "0.2.1-rc.1": { "cordis": "4.0.5" },
-    "0.2.1-rc.2": { "cordis": "4.0.5" },
-    "0.2.1-rc.3": { "cordis": "4.0.5" },
-    "0.2.1-rc.4": { "cordis": "4.0.5" },
-    "0.2.1-rc.5": { "cordis": "4.0.5" },
-    "0.2.2-rc.1": { "cordis": "4.1.0" }
+    "0.2.0-rc.1": { "cordis": "4.0.4", "loader": "1.0.5", "schemastery": "3.18.5", "node": 22 },
+    "0.2.0-rc.2": { "cordis": "4.0.4", "loader": "1.0.5", "schemastery": "3.18.5", "node": 22 },
+    "0.2.1-rc.1": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
+    "0.2.1-rc.2": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
+    "0.2.1-rc.3": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
+    "0.2.1-rc.4": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
+    "0.2.1-rc.5": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
+    "0.2.2-rc.1": { "cordis": "4.1.0", "loader": "1.1.0", "schemastery": "3.19.0", "node": 24 }
   },
   "scripts": {
     "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",

@@ -10,6 +10,11 @@ import { readCompatibility } from './ci-compatibility.mjs'
 
 const script = name => fileURLToPath(new URL(name, import.meta.url))
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)))
+const cohortPackages = {
+  '@deepseek-ai/cordis': 'cordis',
+  '@deepseek-ai/cordis-plugin-loader': 'loader',
+  '@deepseek-ai/schemastery': 'schemastery',
+}
 function fixture(fn) {
   const root = mkdtempSync(join(tmpdir(), 'translation-ci-'))
   try {
@@ -21,17 +26,25 @@ const run = (root, name, args, env = {}) => spawnSync(process.execPath, [script(
   cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: '', GITHUB_STEP_SUMMARY: '', ...env }, timeout: 10000,
 })
 
-test('compatibility matrix is derived from metadata and selects only DSH/Cordis dev dependencies', () => fixture(root => {
+test('compatibility matrix carries cohort Node and selects every exact development cohort', () => fixture(root => {
   const matrix = run(root, 'ci-compatibility.mjs', ['matrix'])
   assert.equal(matrix.status, 0, matrix.stderr)
-  assert.deepEqual(JSON.parse(matrix.stdout), { 'dsh-version': Object.keys(manifest.dshCompatibility) })
+  assert.deepEqual(JSON.parse(matrix.stdout), {
+    include: Object.entries(manifest.dshCompatibility).map(([version, config]) => ({
+      'dsh-version': version,
+      'cohort-node': config.node,
+    })),
+  })
+  assert.equal(manifest.dshCompatibility['0.2.0-rc.1'].loader, '1.0.5')
+  assert.equal(manifest.dshCompatibility['0.2.1-rc.5'].loader, '1.0.6')
+  assert.equal(manifest.dshCompatibility['0.2.2-rc.1'].node, 24)
   for (const version of Object.keys(manifest.dshCompatibility)) {
     const result = run(root, 'ci-compatibility.mjs', ['select', version])
     assert.equal(result.status, 0, result.stderr)
     const selected = JSON.parse(readFileSync(join(root, 'package.json')))
     for (const [name, value] of Object.entries(manifest.devDependencies)) {
       assert.equal(selected.devDependencies[name], name.startsWith('@deepseek-ai/dsh-') ? version
-        : name === '@deepseek-ai/cordis' ? manifest.dshCompatibility[version].cordis : value)
+        : name in cohortPackages ? manifest.dshCompatibility[version][cohortPackages[name]] : value)
     }
     assert.deepEqual(selected.peerDependencies, manifest.peerDependencies)
     assert.equal(run(root, 'ci-compatibility.mjs', ['select', version]).stdout.trim(), 'changed=false')
@@ -40,7 +53,10 @@ test('compatibility matrix is derived from metadata and selects only DSH/Cordis 
 }))
 
 test('compatibility reader rejects empty, ranged and malformed metadata', () => fixture(root => {
-  for (const entries of [undefined, {}, [], { latest: { cordis: '4.0.5' } }, { '0.2.0-rc.1': { cordis: '*' } }]) {
+  for (const entries of [
+    undefined, {}, [], { latest: { cordis: '4.0.5' } }, { '0.2.0-rc.1': { cordis: '*' } },
+    { '0.2.2-rc.1': { cordis: '4.1.0', loader: '1.1.0', schemastery: '3.19.0', node: 23 } },
+  ]) {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ dshCompatibility: entries }))
     assert.throws(() => readCompatibility(join(root, 'package.json')))
   }
@@ -76,11 +92,15 @@ test('workflow isolates PR validation from tag-only publishing with no artifact 
   assert.equal(workflow.jobs.publish.needs, undefined)
   assert.equal(workflow.jobs.publish.permissions['id-token'], 'write')
   const steps = workflow.jobs.verify.steps
+  assert.equal(steps.find(s => s.id === 'setup-cohort').with['node-version'], '${{ matrix.cohort-node }}')
+  assert.ok(!steps.some(s => s.id === 'setup22'))
+  assert.match(steps.find(s => s.id === 'verify22').if, /matrix\.cohort-node == 22/)
+  assert.match(steps.find(s => s.id === 'verify24').if, /steps\.cohort\.outcome == 'success'/)
   assert.match(steps.find(s => s.id === 'verify24').if, /!cancelled\(\)/)
   assert.doesNotMatch(steps.find(s => s.id === 'verify24').if, /verify22|smoke/)
   assert.equal(steps.find(s => s.name === 'Test summary').if, 'always()')
-  assert.match(steps.find(s => s.id === 'smoke').if, /verify22.*matrix\.dsh-version != '0\.2\.2-rc\.1'/)
-  assert.match(steps.find(s => s.id === 'smoke24').if, /verify24.*matrix\.dsh-version == '0\.2\.2-rc\.1'/)
+  assert.match(steps.find(s => s.id === 'smoke').if, /matrix\.cohort-node == 22/)
+  assert.match(steps.find(s => s.id === 'smoke24').if, /matrix\.cohort-node == 24/)
   for (const job of Object.values(workflow.jobs)) {
     assert.ok(job.steps.every(s => !s.uses?.includes('artifact')))
   }
