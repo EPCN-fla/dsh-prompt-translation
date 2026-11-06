@@ -12,6 +12,9 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import LlmRuntime, { createUserMessage, createSystemMessage, LlmAdapter, markAgentLoopRequest, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 
+// A spread supplies the 0.2.2 field without excess-property errors on older cohorts.
+const targetModelSelection = { modelSelection: { provider: 'fixture', model: 'main' } }
+
 it('loads the built bundle through the real Loader and runs prompt → model → translated stream without recursion', async () => {
   const ctx = new Context()
   const requests: GenerateOptions[] = []
@@ -41,7 +44,7 @@ it('loads the built bundle through the real Loader and runs prompt → model →
     await ctx.loader.await()
     expect(ctx.loader.resolve('prompt-translation').fiber?.state).toBe(2)
     const original = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '你好' }] })
-    const decision = await ctx.waterfall('agent/pre-step', { signal: new AbortController().signal, messages: [original], turn: 1, step: 1, agent: { session: { id: 'test-session' }, ctx } as never }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [original] }))
+    const decision = await ctx.waterfall('agent/pre-step', { ...targetModelSelection, signal: new AbortController().signal, messages: [original], turn: 1, step: 1, agent: { session: { id: 'test-session' }, ctx } as never }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [original] }))
     expect(decision.kind).toBe('enter')
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     const system = createSystemMessage('SYSTEM DO NOT TRANSLATE')
@@ -58,7 +61,7 @@ it('loads the built bundle through the real Loader and runs prompt → model →
     expect({ request: requests[1]!.messages.map(m => ({ role: m.role, content: m.content })), chunks }).toMatchSnapshot()
     ctx.loader.remove('prompt-translation')
     await ctx.loader.await()
-    const after = await ctx.waterfall('agent/pre-step', { signal: new AbortController().signal, messages: [original], turn: 2, step: 1, agent: { session: { id: 'test-session' }, ctx } as never }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [original] }))
+    const after = await ctx.waterfall('agent/pre-step', { ...targetModelSelection, signal: new AbortController().signal, messages: [original], turn: 2, step: 1, agent: { session: { id: 'test-session' }, ctx } as never }, async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [original] }))
     expect(after).toEqual({ kind: 'enter', messages: [original] })
     expect(requests).toHaveLength(3)
   } finally {
