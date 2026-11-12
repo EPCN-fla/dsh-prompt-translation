@@ -41,14 +41,12 @@
     }
   },
   "dshCompatibility": {
-    "0.2.0-rc.1": { "cordis": "4.0.4", "loader": "1.0.5", "schemastery": "3.18.5", "node": 22 },
-    "0.2.0-rc.2": { "cordis": "4.0.4", "loader": "1.0.5", "schemastery": "3.18.5", "node": 22 },
-    "0.2.1-rc.1": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
-    "0.2.1-rc.2": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
-    "0.2.1-rc.3": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
-    "0.2.1-rc.4": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
-    "0.2.1-rc.5": { "cordis": "4.0.5", "loader": "1.0.6", "schemastery": "3.18.5", "node": 22 },
-    "0.2.2-rc.1": { "cordis": "4.1.0", "loader": "1.1.0", "schemastery": "3.19.0", "node": 24 }
+    "0.2.2-rc.2": {
+      "cordis": "4.1.0",
+      "loader": "1.1.0",
+      "schemastery": "3.19.0",
+      "node": 24
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
@@ -64,27 +62,29 @@
     "check": "npm run typecheck && npm test && npm run test:scripts && npm run pack:check"
   },
   "engines": {
-    "node": "^22.19.0 || >=24"
+    "node": ">=24.9.0",
+    "dsh": "0.2.2-rc.2"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1 || >=0.2.2-rc.1 <0.2.2",
-    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1 || >=0.2.2-rc.1 <0.2.2",
-    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1 || >=0.2.2-rc.1 <0.2.2",
-    "@deepseek-ai/dsh-typert-registry": ">=0.2.0-rc.1 <0.2.0 || >=0.2.1-rc.1 <0.2.1 || >=0.2.2-rc.1 <0.2.2",
-    "@deepseek-ai/schemastery": "^3.18.4",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.2",
+    "@deepseek-ai/schemastery": "3.19.0",
     "react": "^18.2.0 || ^19.0.0",
     "react-dom": "^18.2.0 || ^19.0.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/cordis-plugin-loader": "1.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-error": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.2",
     "@deepseek-ai/schemastery": "3.19.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "esbuild": "^0.28.0",

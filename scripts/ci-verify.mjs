@@ -1,4 +1,4 @@
-/** Run one Node leg or render both legs into GitHub Actions Summary. */
+/** Run the Node 24 verification leg or render its GitHub Actions Summary. */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -11,22 +11,19 @@ const version = process.env.DSH_TEST_VERSION
 if (!versions.includes(version)) throw new Error('DSH_TEST_VERSION must name a supported exact version')
 
 if (mode === 'summary') {
-  const lines = [`## DSH ${version} — Node 22 / 24`, '',
+  const lines = [`## DSH ${version} — Node 24`, '',
     '| Node | Setup | Verification | Install | Typecheck | Tests | Scripts | Build | Package | Browser |',
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |']
-  for (const node of ['22', '24']) {
-    let report
-    try { report = JSON.parse(readFileSync(`${directory}/node-${node}.json`, 'utf8')) } catch { /* A failed setup has no report. */ }
-    const status = key => report?.steps.find(step => step.name === key)?.status ?? 'not run'
-    lines.push(`| ${report?.node ?? node} | ${process.env[`SETUP_${node}`] ?? 'unknown'} | ${process.env[`VERIFY_${node}`] ?? 'unknown'} | ${status('install')} | ${status('typecheck')} | ${status('test')} | ${status('scripts')} | ${status('build')} | ${status('package')} | ${status('browser')} |`)
-  }
-  lines.push('', `Node 22 exact-host smoke: **${process.env.SMOKE_RESULT ?? 'not run'}**.`,
-    `Node 24 exact-host smoke: **${process.env.SMOKE24_RESULT ?? 'not run'}**.`,
+  let report
+  try { report = JSON.parse(readFileSync(`${directory}/node-24.json`, 'utf8')) } catch { /* A failed setup has no report. */ }
+  const status = key => report?.steps.find(step => step.name === key)?.status ?? 'not run'
+  lines.push(`| ${report?.node ?? 24} | ${process.env.SETUP_24 ?? 'unknown'} | ${process.env.VERIFY_24 ?? 'unknown'} | ${status('install')} | ${status('typecheck')} | ${status('test')} | ${status('scripts')} | ${status('build')} | ${status('package')} | ${status('browser')} |`)
+  lines.push('', `Node 24 exact-host smoke: **${process.env.SMOKE24_RESULT ?? 'not run'}**.`,
     '', 'Logs and temporary tarballs stay on the runner; no artifacts or GitHub Release are uploaded.', '')
   const text = lines.join('\n')
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text)
   else process.stdout.write(text)
-} else if (mode === 'verify' && ['22', '24'].includes(major)) {
+} else if (mode === 'verify' && major === '24') {
   if (process.versions.node.split('.')[0] !== major) throw new Error(`Expected Node ${major}, got ${process.version}`)
   mkdirSync(directory, { recursive: true })
   const report = { node: process.version, dsh: version, steps: [] }
@@ -43,8 +40,7 @@ if (mode === 'summary') {
     save()
     return status === 'passed'
   }
-  // Node 24 reuses the selected cohort's lockfile; it must not silently resolve
-  // different dependencies from Node 22. Install scripts never run here.
+  // Install the selected cohort without lifecycle scripts; later steps reuse it.
   if (run('install', ['ci', '--ignore-scripts'])) {
     run('typecheck', ['run', 'typecheck'])
     run('test', ['run', 'test'])
@@ -62,5 +58,5 @@ if (mode === 'summary') {
   }
   process.exitCode = report.steps.some(step => step.status === 'failed') ? 1 : 0
 } else {
-  throw new Error('Usage: node scripts/ci-verify.mjs verify <22|24> | summary')
+  throw new Error('Usage: node scripts/ci-verify.mjs verify 24 | summary')
 }

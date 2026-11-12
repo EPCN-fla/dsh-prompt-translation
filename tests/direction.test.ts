@@ -9,7 +9,7 @@ import { detectLanguage, normalizeLanguage } from '../src/direction.js'
 import { traditional } from '../src/translation.js'
 import { createStorage, stubTypert } from './storage.js'
 
-// A spread supplies the 0.2.2 field without excess-property errors on older cohorts.
+// DSH 0.2.2 requires the selected model on every pre-step decision.
 const targetModelSelection = { modelSelection: { provider: 'fixture', model: 'main' } }
 
 it('normalizes provider detection codes without inventing unknown languages', () => {
