@@ -56,6 +56,8 @@ export function LanguageSelect({ source, value, onChange, disabled, compact }: {
 export function SettingsCard(props: Props) {
   const state = useSettings(props)
   const catalogId = useId()
+  const bodyId = useId()
+  const [expanded, setExpanded] = useState(false)
   const { value, save, disabled } = state
   const [patch, setPatch] = useState<Partial<Options>>({})
   const [saveError, setSaveError] = useState('')
@@ -97,14 +99,15 @@ export function SettingsCard(props: Props) {
       return
     }
     if (changes.apiKey === '') delete changes.apiKey
-    void save(changes).then(ok => { if (ok) setPatch({}) })
+    void save(changes).then(ok => { if (ok) { setPatch({}); setExpanded(false) } })
   }
-  return <section className="dsh-pt-card dsh-pt-card-open">
-    <div className="dsh-pt-card-header">
+  return <section className={`dsh-pt-card${expanded ? ' dsh-pt-card-open' : ''}`}>
+    <button type="button" className="dsh-pt-card-header" aria-expanded={expanded} aria-controls={bodyId} onClick={() => setExpanded(current => !current)}>
       <span className="dsh-pt-head-text"><span role="heading" aria-level={3} className="dsh-pt-card-name">提示词与输出翻译</span><span className="dsh-pt-card-description">输入译向目标语言，思考与回答译回原始语言。</span></span>
       {dirty && <span className="dsh-pt-tag">未保存</span>}
-    </div>
-    <form className="dsh-pt-card-body" onSubmit={event => { event.preventDefault(); submit() }}>
+      <svg className="dsh-pt-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+    </button>
+    <form id={bodyId} className="dsh-pt-card-body" hidden={!expanded} onSubmit={event => { event.preventDefault(); submit() }}>
     <fieldset disabled={disabled} className="dsh-pt-fields">
       <label><input type="checkbox" checked={draft.enabled} onChange={event => edit('enabled', event.target.checked)} />启用翻译</label>
       <div className="dsh-pt-row"><LanguageSelect source value={draft.source} onChange={next => edit('source', next)} /><span>→</span><LanguageSelect value={draft.target} onChange={next => { if (next !== 'auto') edit('target', next) }} /></div>
