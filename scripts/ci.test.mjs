@@ -26,7 +26,7 @@ const run = (root, name, args, env = {}) => spawnSync(process.execPath, [script(
   cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: '', GITHUB_STEP_SUMMARY: '', ...env }, timeout: 10000,
 })
 
-test('compatibility matrix carries cohort Node and selects every exact development cohort', () => fixture(root => {
+test('compatibility matrix selects the exact Node 24 development cohort', () => fixture(root => {
   const matrix = run(root, 'ci-compatibility.mjs', ['matrix'])
   assert.equal(matrix.status, 0, matrix.stderr)
   assert.deepEqual(JSON.parse(matrix.stdout), {
@@ -35,9 +35,16 @@ test('compatibility matrix carries cohort Node and selects every exact developme
       'cohort-node': config.node,
     })),
   })
-  assert.equal(manifest.dshCompatibility['0.2.0-rc.1'].loader, '1.0.5')
-  assert.equal(manifest.dshCompatibility['0.2.1-rc.5'].loader, '1.0.6')
-  assert.equal(manifest.dshCompatibility['0.2.2-rc.1'].node, 24)
+  assert.deepEqual(Object.keys(manifest.dshCompatibility), ['0.2.2-rc.2'])
+  assert.equal(manifest.dshCompatibility['0.2.2-rc.2'].node, 24)
+  assert.equal(manifest.engines.node, '>=24.9.0')
+  assert.equal(manifest.engines.dsh, '0.2.2-rc.2')
+  for (const [name, range] of Object.entries(manifest.devDependencies)) {
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2')
+  }
+  for (const [name, range] of Object.entries(manifest.peerDependencies)) {
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2')
+  }
   for (const version of Object.keys(manifest.dshCompatibility)) {
     const result = run(root, 'ci-compatibility.mjs', ['select', version])
     assert.equal(result.status, 0, result.stderr)
@@ -55,30 +62,30 @@ test('compatibility matrix carries cohort Node and selects every exact developme
 test('compatibility reader rejects empty, ranged and malformed metadata', () => fixture(root => {
   for (const entries of [
     undefined, {}, [], { latest: { cordis: '4.0.5' } }, { '0.2.0-rc.1': { cordis: '*' } },
-    { '0.2.2-rc.1': { cordis: '4.1.0', loader: '1.1.0', schemastery: '3.19.0', node: 23 } },
+    { '0.2.2-rc.2': { cordis: '4.1.0', loader: '1.1.0', schemastery: '3.19.0', node: 23 } },
+    { '0.2.2-rc.2': { cordis: '4.1.0', loader: '1.1.0', schemastery: '3.19.0', node: 22 } },
   ]) {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ dshCompatibility: entries }))
     assert.throws(() => readCompatibility(join(root, 'package.json')))
   }
 }))
 
-test('verification records failures, continues independent checks and summarizes both Node legs', { skip: process.platform === 'win32' }, () => fixture(root => {
+test('verification records failures, continues independent checks and summarizes Node 24', { skip: process.platform === 'win32' }, () => fixture(root => {
   mkdirSync(join(root, 'bin'))
   const npm = join(root, 'bin/npm')
   writeFileSync(npm, `#!${process.execPath}\nprocess.exit(process.argv.includes(process.env.FAIL_STEP) ? 1 : 0)\n`)
   chmodSync(npm, 0o755)
   const major = process.versions.node.split('.')[0]
-  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.0-rc.1', FAIL_STEP: 'typecheck' }
+  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.2-rc.2', FAIL_STEP: 'typecheck' }
   const result = run(root, 'ci-verify.mjs', ['verify', major], env)
   assert.equal(result.status, 1, result.stderr)
   let report = JSON.parse(readFileSync(join(root, `artifacts/ci/node-${major}.json`)))
   assert.equal(report.steps.find(s => s.name === 'typecheck').status, 'failed')
   assert.equal(report.steps.find(s => s.name === 'browser').status, 'passed')
-  const summary = run(root, 'ci-verify.mjs', ['summary'], { ...env, SMOKE_RESULT: 'success', SMOKE24_RESULT: 'success' })
+  const summary = run(root, 'ci-verify.mjs', ['summary'], { ...env, SETUP_24: 'success', VERIFY_24: 'success', SMOKE24_RESULT: 'success' })
   assert.equal(summary.status, 0, summary.stderr)
   assert.match(summary.stdout, /failed/)
-  assert.match(summary.stdout, /not run/)
-  assert.match(summary.stdout, /Node 22 exact-host smoke: \*\*success\*\*/)
+  assert.doesNotMatch(summary.stdout, /Node 22/)
   assert.match(summary.stdout, /Node 24 exact-host smoke: \*\*success\*\*/)
   const installFailure = run(root, 'ci-verify.mjs', ['verify', major], { ...env, FAIL_STEP: 'ci' })
   assert.equal(installFailure.status, 1)
@@ -92,15 +99,13 @@ test('workflow isolates PR validation from tag-only publishing with no artifact 
   assert.equal(workflow.jobs.publish.needs, undefined)
   assert.equal(workflow.jobs.publish.permissions['id-token'], 'write')
   const steps = workflow.jobs.verify.steps
-  assert.equal(steps.find(s => s.id === 'setup-cohort').with['node-version'], '${{ matrix.cohort-node }}')
-  assert.ok(!steps.some(s => s.id === 'setup22'))
-  assert.match(steps.find(s => s.id === 'verify22').if, /matrix\.cohort-node == 22/)
+  assert.equal(steps.find(s => s.id === 'setup-cohort').with['node-version'], '24.9.0')
+  assert.ok(!steps.some(s => ['setup22', 'verify22', 'smoke'].includes(s.id)))
   assert.match(steps.find(s => s.id === 'verify24').if, /steps\.cohort\.outcome == 'success'/)
   assert.match(steps.find(s => s.id === 'verify24').if, /!cancelled\(\)/)
   assert.doesNotMatch(steps.find(s => s.id === 'verify24').if, /verify22|smoke/)
   assert.equal(steps.find(s => s.name === 'Test summary').if, 'always()')
-  assert.match(steps.find(s => s.id === 'smoke').if, /matrix\.cohort-node == 22/)
-  assert.match(steps.find(s => s.id === 'smoke24').if, /matrix\.cohort-node == 24/)
+  assert.match(steps.find(s => s.id === 'smoke24').if, /steps\.verify24\.outcome == 'success'/)
   for (const job of Object.values(workflow.jobs)) {
     assert.ok(job.steps.every(s => !s.uses?.includes('artifact')))
   }

@@ -1,4 +1,4 @@
-# Branch pushes do not run CI. PR: one job per DSH, Node 22 then 24.
+# Branch pushes do not run CI. PR: one job per supported DSH version on Node 24.
 # v* tags: build + npm Trusted Publishing only; no tests or artifact uploads.
 name: ci
 
@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24.9.0
       - name: Read package compatibility
         id: matrix
         run: node scripts/ci-compatibility.mjs matrix
@@ -44,58 +44,36 @@ jobs:
       DSH_TEST_VERSION: ${{ matrix.dsh-version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Set up cohort Node
+      - name: Set up Node 24
         id: setup-cohort
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.cohort-node }}
+          node-version: 24.9.0
           cache: npm
       - name: Select exact DSH cohort
         id: cohort
         run: |
-          # Validate the committed lock before selecting a different cohort.
           npm ci --ignore-scripts
           CHANGED=$(node scripts/ci-compatibility.mjs select "$DSH_TEST_VERSION")
           if [ "$CHANGED" = 'changed=true' ]; then
             npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           fi
-      - name: Verify Node 22
-        id: verify22
-        if: ${{ !cancelled() && matrix.cohort-node == 22 && steps.cohort.outcome == 'success' }}
-        run: node scripts/ci-verify.mjs verify 22
-      # The packed plugin and browser evidence remain on this runner only.
-      - name: Exact full Web host smoke (Node 22)
-        id: smoke
-        if: ${{ !cancelled() && matrix.cohort-node == 22 && steps.verify22.outcome == 'success' }}
-        run: |
-          npm run host:install -- "$DSH_TEST_VERSION"
-          npm run test:host -- "$DSH_TEST_VERSION"
-      # A Node 22 or host failure must not hide the Node 24 result.
-      - name: Set up Node 24
-        id: setup24
-        if: ${{ !cancelled() }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
       - name: Verify Node 24
         id: verify24
-        if: ${{ !cancelled() && steps.setup24.outcome == 'success' && steps.cohort.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.cohort.outcome == 'success' }}
         run: node scripts/ci-verify.mjs verify 24
+      # The packed plugin and browser evidence remain on this runner only.
       - name: Exact full Web host smoke (Node 24)
         id: smoke24
-        if: ${{ !cancelled() && matrix.cohort-node == 24 && steps.verify24.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.verify24.outcome == 'success' }}
         run: |
           npm run host:install -- "$DSH_TEST_VERSION"
           npm run test:host -- "$DSH_TEST_VERSION"
       - name: Test summary
         if: always()
         env:
-          SETUP_22: ${{ matrix.cohort-node == 22 && steps.setup-cohort.outcome || 'not run' }}
-          SETUP_24: ${{ steps.setup24.outcome }}
-          VERIFY_22: ${{ steps.verify22.outcome }}
+          SETUP_24: ${{ steps.setup-cohort.outcome }}
           VERIFY_24: ${{ steps.verify24.outcome }}
-          SMOKE_RESULT: ${{ steps.smoke.outcome }}
           SMOKE24_RESULT: ${{ steps.smoke24.outcome }}
         run: node scripts/ci-verify.mjs summary
 
@@ -111,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.9.0
           cache: npm
       # npm OIDC requires >=11.5.1. No long-lived npm token is used.
       - name: Ensure npm CLI with trusted publishing support

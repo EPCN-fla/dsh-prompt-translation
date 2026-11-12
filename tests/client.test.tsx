@@ -54,19 +54,23 @@ it('mounts directly after the permission slot, saves a language and cleans its p
   expect(document.querySelector('.dsh-pt-seat')).toBeNull()
   expect(fixtureState.listeners.size).toBe(0)
 })
-it('keeps plugin settings expanded without a collapse control', async () => {
+it('collapses plugin settings by default and toggles through an accessible header button', async () => {
   const f = fixture()
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
   await act(async () => root.render(createElement(SettingsCard, f.props)))
-  const header = host.querySelector('.dsh-pt-card-header') as HTMLElement
+  const header = host.querySelector('button.dsh-pt-card-header') as HTMLButtonElement
   const form = host.querySelector('form')!
-  expect(header.tagName).toBe('DIV')
-  expect(header.querySelector('button')).toBeNull()
-  expect(header.querySelector('svg')).toBeNull()
+  expect(header.getAttribute('aria-expanded')).toBe('false')
+  expect(header.getAttribute('aria-controls')).toBe(form.id)
+  expect(header.querySelector('svg')).not.toBeNull()
+  expect(form.hidden).toBe(true)
+  await act(async () => header.click())
+  expect(header.getAttribute('aria-expanded')).toBe('true')
   expect(form.hidden).toBe(false)
   await act(async () => header.click())
-  expect(form.hidden).toBe(false)
+  expect(header.getAttribute('aria-expanded')).toBe('false')
+  expect(form.hidden).toBe(true)
 })
 it('retains edited configuration and displays failure when saving is rejected', async () => {
   const f = fixture()
@@ -74,11 +78,29 @@ it('retains edited configuration and displays failure when saving is rejected', 
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
   await act(async () => root.render(createElement(SettingsCard, f.props)))
+  await act(async () => (host.querySelector('.dsh-pt-card-header') as HTMLButtonElement).click())
   const select = host.querySelector('select[aria-label="原始语言"]') as HTMLSelectElement
   await act(async () => { select.value = 'fr'; select.dispatchEvent(new Event('change', { bubbles: true })) })
   await act(async () => (host.querySelector('button[type=submit]') as HTMLButtonElement).click())
   expect(host.querySelector('[role="alert"]')?.textContent).toBe('保存被拒绝')
   expect(select.value).toBe('fr')
+  expect((host.querySelector('form') as HTMLFormElement).hidden).toBe(false)
+  expect(host.querySelector('.dsh-pt-card-header')?.getAttribute('aria-expanded')).toBe('true')
+})
+it('collapses settings after a successful save', async () => {
+  const f = fixture()
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(SettingsCard, f.props)))
+  const header = host.querySelector('.dsh-pt-card-header') as HTMLButtonElement
+  await act(async () => header.click())
+  const select = host.querySelector('select[aria-label="原始语言"]') as HTMLSelectElement
+  await act(async () => { select.value = 'fr'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+  await act(async () => (host.querySelector('button[type=submit]') as HTMLButtonElement).click())
+  expect(f.current.source).toBe('fr')
+  expect((host.querySelector('form') as HTMLFormElement).hidden).toBe(true)
+  expect(header.getAttribute('aria-expanded')).toBe('false')
+  expect(host.querySelector('.dsh-pt-tag')).toBeNull()
 })
 it('retries a stale revision without overwriting unrelated settings or secrets', async () => {
   const f = fixture()
@@ -113,6 +135,7 @@ it('refuses to reuse a redacted credential when switching translation providers'
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
   await act(async () => root.render(createElement(SettingsCard, f.props)))
+  await act(async () => (host.querySelector('.dsh-pt-card-header') as HTMLButtonElement).click())
   const select = [...host.querySelectorAll('select')].find(el => el.value === 'google')!
   await act(async () => { select.value = 'deepl'; select.dispatchEvent(new Event('change', { bubbles: true })) })
   await act(async () => (host.querySelector('button[type=submit]') as HTMLButtonElement).click())
@@ -216,6 +239,7 @@ it('discards staged settings in the expanded themed card', async () => {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); cleanup.push(() => root.unmount())
   await act(async () => root.render(createElement(SettingsCard, f.props)))
+  await act(async () => (host.querySelector('.dsh-pt-card-header') as HTMLButtonElement).click())
   const select = host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement
   await act(async () => { select.value = 'fr'; select.dispatchEvent(new Event('change', { bubbles: true })) })
   expect(host.querySelector('.dsh-pt-tag')?.textContent).toBe('未保存')

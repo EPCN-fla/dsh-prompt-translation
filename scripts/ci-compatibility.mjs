@@ -31,7 +31,7 @@ export function readCompatibility(path = 'package.json') {
         throw new Error(`dshCompatibility ${version} requires exact or tilde ${Object.keys(cohortPackages).join(', ')} versions`)
       }
     }
-    if (![22, 24].includes(config.node)) throw new Error(`dshCompatibility ${version} requires node 22 or 24`)
+    if (config.node !== 24) throw new Error(`dshCompatibility ${version} requires node 24`)
   }
   return { manifest, entries }
 }

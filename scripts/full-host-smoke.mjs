@@ -82,10 +82,12 @@ try {
  await checkIcon('[data-plugin-detail]')
  await page.getByRole('heading',{name:'提示词与输出翻译'}).waitFor()
  const settingsCard=page.locator('.dsh-pt-card')
+ const settingsToggle=settingsCard.locator('button.dsh-pt-card-header')
+ assert.equal(await settingsCard.locator('form').isVisible(),false)
+ assert.equal(await settingsToggle.getAttribute('aria-expanded'),'false')
+ await settingsToggle.click()
  assert.equal(await settingsCard.locator('form').isVisible(),true)
- assert.equal(await settingsCard.locator('.dsh-pt-card-header button').count(),0)
- await settingsCard.locator('.dsh-pt-card-header').click()
- assert.equal(await settingsCard.locator('form').isVisible(),true)
+ assert.equal(await settingsToggle.getAttribute('aria-expanded'),'true')
 
  assert.match(await page.locator('body').innerText(),/Running/)
  await page.getByLabel('原始语言',{exact:true}).selectOption('ja')
@@ -97,11 +99,16 @@ try {
   if (attempt === 40) throw new Error('Settings were not persisted')
   await wait(100)
  }
+ assert.equal(await settingsCard.locator('form').isVisible(),false)
+ assert.equal(await settingsToggle.getAttribute('aria-expanded'),'false')
  await page.screenshot({path:join(root,'settings.png'),fullPage:true})
  await page.reload();await wait(1500);await dismiss()
  await page.getByRole('button',{name:'Plugins',exact:true}).click()
  const entry=page.getByRole('button',{name:'View dsh-prompt-translation',exact:true})
  await entry.click()
+ const reloadedCard=page.locator('.dsh-pt-card')
+ assert.equal(await reloadedCard.locator('form').isVisible(),false)
+ await reloadedCard.locator('button.dsh-pt-card-header').click()
  await page.waitForFunction(()=>document.querySelector('select[aria-label="原始语言"]')?.value==='ja')
  await page.getByRole('button',{name:'New session',exact:true}).first().click()
  await wait(1000);await dismiss()
@@ -247,7 +254,7 @@ try {
  assert.equal(profileConfig.sessionOverrides,undefined)
  assert.deepEqual(errors,[])
  assert.ok(resources.some(r=>r.status===200))
- const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','manifest SVG icon decoded on plugin card and detail','settings card fixed expanded on the real Plugins page','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
+ const result={version,result:'pass',checks:['exact published CLI','isolated complete Web Profile cold start','plugin Running','manifest SVG icon decoded on plugin card and detail','settings card collapsed by default, expandable and collapsed after save on the real Plugins page','independent YAML settings persisted and reload verified; no Profile user writes','composer placement','quick setting scoped to the first conversation','complete user turn','forward Japanese / return Chinese','target switches from Japanese to English','chat displays original Chinese','trajectory Preview and Raw contain original and sent translation','assistant reasoning and output comparisons survive reload in Preview and Raw','chat answer stays translated without comparison labels','two user turns visible','user message and per-session settings survive reload', 'second conversation stays disabled with no translator call', 'Profile scope footer removed','failed translation retains original and blocks main model','no page errors'],position,resources,modelCalls:calls.length,limitation:'Deterministic external model; no credentialed provider or translation quality validation'}
  await writeFile(join(root,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 }catch(error){
  const state = await page?.evaluate(hostTurnDiagnostics).catch(()=>undefined)

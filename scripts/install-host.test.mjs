@@ -13,7 +13,7 @@ const scan = root => JSON.parse(execFileSync(process.execPath, [scanner, root], 
 function writePackage(root, name, extra = {}) {
   const dir = join(root, 'node_modules', name)
   mkdirSync(join(dir, 'lib'), { recursive: true })
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '0.2.0-rc.1', type: 'module', exports: './lib/index.js', ...extra }))
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '0.2.2-rc.2', type: 'module', exports: './lib/index.js', ...extra }))
   writeFileSync(join(dir, 'lib/index.js'), 'export const name = "fixture"\n')
   return join(dir, 'package.json')
 }
@@ -21,18 +21,18 @@ test('peer scanner reports required peers but skips optional ones and accepts ES
   const root = mkdtempSync(join(tmpdir(), 'translation-peer-scan-'))
   try {
     writePackage(root, '@deepseek-ai/dsh', {
-      peerDependencies: { '@deepseek-ai/missing': '0.2.0-rc.1', '@deepseek-ai/optional': '*', '@deepseek-ai/esm': '0.2.0-rc.1' },
+      peerDependencies: { '@deepseek-ai/missing': '0.2.2-rc.2', '@deepseek-ai/optional': '*', '@deepseek-ai/esm': '0.2.2-rc.2' },
       peerDependenciesMeta: { '@deepseek-ai/optional': { optional: true } },
     })
     writePackage(root, '@deepseek-ai/esm')
-    assert.deepEqual(scan(root), { '@deepseek-ai/missing': '0.2.0-rc.1' })
+    assert.deepEqual(scan(root), { '@deepseek-ai/missing': '0.2.2-rc.2' })
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 test('fresh scanner sees peers installed by a child after earlier negative resolution', () => {
   const root = mkdtempSync(join(tmpdir(), 'translation-peer-cache-'))
   try {
-    const owner = writePackage(root, '@deepseek-ai/dsh', { peerDependencies: { '@deepseek-ai/new-peer': '0.2.0-rc.1' } })
-    assert.deepEqual(scan(root), { '@deepseek-ai/new-peer': '0.2.0-rc.1' })
+    const owner = writePackage(root, '@deepseek-ai/dsh', { peerDependencies: { '@deepseek-ai/new-peer': '0.2.2-rc.2' } })
+    assert.deepEqual(scan(root), { '@deepseek-ai/new-peer': '0.2.2-rc.2' })
     assert.throws(() => createRequire(owner).resolve('@deepseek-ai/new-peer'), { code: 'MODULE_NOT_FOUND' })
     // Match npm's process boundary, rather than invalidating caches with a
     // parent-process writeFileSync (which would hide the original regression).
@@ -40,7 +40,7 @@ test('fresh scanner sees peers installed by a child after earlier negative resol
       import { mkdirSync, writeFileSync } from 'node:fs';
       const dir = ${JSON.stringify(join(root, 'node_modules/@deepseek-ai/new-peer'))};
       mkdirSync(dir + '/lib', { recursive: true });
-      writeFileSync(dir + '/package.json', JSON.stringify({ name: '@deepseek-ai/new-peer', version: '0.2.0-rc.1', type: 'module', exports: './lib/index.js' }));
+      writeFileSync(dir + '/package.json', JSON.stringify({ name: '@deepseek-ai/new-peer', version: '0.2.2-rc.2', type: 'module', exports: './lib/index.js' }));
       writeFileSync(dir + '/lib/index.js', 'export const name = "peer"');
     `])
     assert.deepEqual(scan(root), {})
@@ -71,14 +71,14 @@ fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ packages
 fs.appendFileSync(path.join(root, 'installs.log'), 'install\\n');
 `)
     chmodSync(npm, 0o755)
-    const output = execFileSync(process.execPath, [installer, '0.2.0-rc.1'], {
+    const output = execFileSync(process.execPath, [installer, '0.2.2-rc.2'], {
       cwd, env: { ...process.env, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH ?? ''}` }, encoding: 'utf8', timeout: 30000,
     })
-    const root = join(cwd, 'artifacts/full-hosts/0.2.0-rc.1')
-    assert.match(output, /Installed exact DSH 0\.2\.0-rc\.1/)
+    const root = join(cwd, 'artifacts/full-hosts/0.2.2-rc.2')
+    assert.match(output, /Installed exact DSH 0\.2\.2-rc\.2/)
     assert.equal(readFileSync(join(root, 'installs.log'), 'utf8'), 'install\ninstall\ninstall\n')
     assert.deepEqual(scan(root), {})
-    assert.equal(JSON.parse(readFileSync(join(root, 'package.json'))).dependencies['@deepseek-ai/peer-b'], '0.2.0-rc.1')
+    assert.equal(JSON.parse(readFileSync(join(root, 'package.json'))).dependencies['@deepseek-ai/peer-b'], '0.2.2-rc.2')
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 test('peer scanner surfaces invalid package manifests rather than retrying them as missing', () => {

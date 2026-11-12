@@ -18,10 +18,12 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`http://127.0.0.1:${server.address().port}`)
   const settingsCard = page.locator('.dsh-pt-card')
+  const settingsToggle = settingsCard.locator('button.dsh-pt-card-header')
+  assert.equal(await settingsCard.locator('form').isVisible(), false)
+  assert.equal(await settingsToggle.getAttribute('aria-expanded'), 'false')
+  await settingsToggle.click()
   assert.equal(await settingsCard.locator('form').isVisible(), true)
-  assert.equal(await settingsCard.locator('.dsh-pt-card-header button').count(), 0)
-  await settingsCard.locator('.dsh-pt-card-header').click()
-  assert.equal(await settingsCard.locator('form').isVisible(), true)
+  assert.equal(await settingsToggle.getAttribute('aria-expanded'), 'true')
   await page.getByRole('button', { name: '翻译', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '快捷翻译设置' })
   await dialog.getByLabel('原始语言').selectOption('ja')
@@ -55,6 +57,8 @@ try {
   await page.getByRole('button', { name: '保存设置' }).click()
   await page.waitForFunction(() => window.fixtureState.type === 'agent')
   assert.equal(await page.evaluate(() => window.fixtureState.reasoningEffort), 'low')
+  assert.equal(await settingsCard.locator('form').isVisible(), false)
+  assert.equal(await settingsToggle.getAttribute('aria-expanded'), 'false')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: '翻译', exact: true }).click()
   await page.screenshot({ path: 'artifacts/browser-mobile.png', fullPage: true })
@@ -62,7 +66,7 @@ try {
   assert.equal(await page.locator('.dsh-pt-seat').count(), 0)
   assert.equal(await page.locator('style[data-dsh-prompt-translation]').count(), 0)
   assert.deepEqual(errors, [])
-  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'settings card fixed expanded without collapse control', 'permission < translation < plan', 'per-session quick persistence without changing global quick defaults', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
+  const result = { result: 'pass', browser: await browser.version(), position, pageErrors: errors, checks: ['built module-loader bundle', 'settings card collapsed by default, expandable and collapsed after save', 'permission < translation < plan', 'per-session quick persistence without changing global quick defaults', 'agent settings persistence', 'Profile scope footer removed', 'mobile viewport', 'unload cleanup'], limitation: 'Isolated browser fixture with host-compatible slot wrappers and settings Remote; not full DSH Web application' }
   await writeFile('artifacts/browser-result.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result))
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)) }

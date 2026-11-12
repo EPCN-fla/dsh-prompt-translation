@@ -12,7 +12,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import LlmRuntime, { createUserMessage, createSystemMessage, LlmAdapter, markAgentLoopRequest, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 
-// A spread supplies the 0.2.2 field without excess-property errors on older cohorts.
+// DSH 0.2.2 requires the selected model on every pre-step decision.
 const targetModelSelection = { modelSelection: { provider: 'fixture', model: 'main' } }
 
 it('loads the built bundle through the real Loader and runs prompt → model → translated stream without recursion', async () => {
