@@ -35,10 +35,11 @@ The plugin provides separate content switches without modifying the Agent loop o
 
 ## Installation
 
-The correspondence matrix between plugin versions and DSH versions is as follows. Plugin 0.2.0 supports only DSH 0.2.2-rc.2 and requires Node.js >=24.9.0; older plugin rows are historical compatibility records.
+The correspondence matrix between plugin versions and DSH versions is as follows. Plugin 0.2.1 supports DSH 0.2.2-rc.2 and 0.2.2-rc.3 and requires Node.js >=24.9.0; plugin 0.2.0 supports only DSH 0.2.2-rc.2; older plugin rows are historical compatibility records.
 
 | Plugin version | Minimum compatible DSH version | Highest compatible DSH version |
 | --- | --- | --- |
+| 0.2.1 | 0.2.2-rc.2 | 0.2.2-rc.3 |
 | 0.2.0 | 0.2.2-rc.2 | 0.2.2-rc.2 |
 | 0.1.6 | 0.2.0-rc.1 | 0.2.2-rc.1 |
 | 0.1.5 | 0.2.0-rc.1 | 0.2.2-rc.1 |
@@ -203,9 +204,9 @@ npm run build
 npm run pack:check
 npm run test:browser
 
-# Full Web validation: install an isolated exact-version host, then run it
-npm run host:install -- 0.2.2-rc.2
-npm run test:host -- 0.2.2-rc.2
+# Full Web validation: install an isolated exact-version host, then run it (0.2.2-rc.2 or 0.2.2-rc.3)
+npm run host:install -- 0.2.2-rc.3
+npm run test:host -- 0.2.2-rc.3
 ```
 
 `npm run check` combines type checking, tests, builds, and package inspection. Build outputs live in `lib/`; packages and evidence live in `artifacts/`. Override the default Chrome executable with `CHROME_PATH` and the Playwright channel with `CHROME_CHANNEL`. `.npmrc` sets `legacy-peer-deps=true`; the host installation script fills required peers from exact-version manifests to avoid mixing DSH prerelease versions.
@@ -223,7 +224,7 @@ npm run test:host -- 0.2.2-rc.2
 | `scripts/browser-smoke.mjs` | Built browser module, control placement, desktop and mobile viewports |
 | `scripts/full-host-smoke.mjs` | Exact-version full Web cold starts, independent YAML reload, two-conversation independence, and user turns |
 
-CI runs only for PRs and `v*` tag pushes, not ordinary branch pushes. PRs read the exact version matrix from `package.json` → `dshCompatibility`; the current matrix contains only DSH 0.2.2-rc.2 and uses Node 24 (>=24.9.0) from the first install onward. Each job selects the complete DSH/Cordis/Loader/Schemastery development cohort and checks type checking, unit and script tests, builds, package inspection, browser behavior, and the exact-version full Web host; results appear in Actions Summary. Tags independently run version gates, build, and publish through npm OIDC without tests or dependencies on PR jobs; ensure the tagged commit has passed PR checks first. Prereleases use `next`; stable releases use `latest` with rollback protection. No artifacts or GitHub Releases are uploaded; temporary packages and evidence stay on the runner.
+CI runs only for PRs and `v*` tag pushes, not ordinary branch pushes. PRs read the exact version matrix from `package.json` → `dshCompatibility`; the current matrix covers DSH 0.2.2-rc.2 and 0.2.2-rc.3 and uses Node 24 (>=24.9.0) from the first install onward. Each job selects the complete DSH/Cordis/Loader/Schemastery development cohort and checks type checking, unit and script tests, builds, package inspection, browser behavior, and the exact-version full Web host; results appear in Actions Summary. Tags independently run version gates, build, and publish through npm OIDC without tests or dependencies on PR jobs; ensure the tagged commit has passed PR checks first. Prereleases use `next`; stable releases use `latest` with rollback protection. No artifacts or GitHub Releases are uploaded; temporary packages and evidence stay on the runner.
 
 ## License
 

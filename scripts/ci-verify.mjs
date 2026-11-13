@@ -41,7 +41,7 @@ if (mode === 'summary') {
     return status === 'passed'
   }
   // Install the selected cohort without lifecycle scripts; later steps reuse it.
-  if (run('install', ['ci', '--ignore-scripts'])) {
+  if (run('install', ['ci', '--ignore-scripts', '--legacy-peer-deps=false'])) {
     run('typecheck', ['run', 'typecheck'])
     run('test', ['run', 'test'])
     run('scripts', ['run', 'test:scripts'])

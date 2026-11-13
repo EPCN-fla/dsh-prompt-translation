@@ -19,6 +19,9 @@ function fixture(fn) {
   const root = mkdtempSync(join(tmpdir(), 'translation-ci-'))
   try {
     writeFileSync(join(root, 'package.json'), JSON.stringify(manifest))
+    writeFileSync(join(root, 'package-lock.json'), JSON.stringify({ packages: {
+      'node_modules/@deepseek-ai/dsh-scope': { version: '0.2.2-rc.3' },
+    } }))
     return fn(root)
   } finally { rmSync(root, { recursive: true, force: true }) }
 }
@@ -35,16 +38,23 @@ test('compatibility matrix selects the exact Node 24 development cohort', () => 
       'cohort-node': config.node,
     })),
   })
-  assert.deepEqual(Object.keys(manifest.dshCompatibility), ['0.2.2-rc.2'])
+  assert.deepEqual(Object.keys(manifest.dshCompatibility), ['0.2.2-rc.2', '0.2.2-rc.3'])
   assert.equal(manifest.dshCompatibility['0.2.2-rc.2'].node, 24)
+  assert.equal(manifest.dshCompatibility['0.2.2-rc.3'].node, 24)
   assert.equal(manifest.engines.node, '>=24.9.0')
-  assert.equal(manifest.engines.dsh, '0.2.2-rc.2')
+  assert.equal(manifest.engines.dsh, '0.2.2-rc.2 || 0.2.2-rc.3')
+  const defaultVersion = Object.keys(manifest.dshCompatibility).at(-1)
   for (const [name, range] of Object.entries(manifest.devDependencies)) {
-    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2')
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, defaultVersion)
   }
   for (const [name, range] of Object.entries(manifest.peerDependencies)) {
-    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2')
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2 || 0.2.2-rc.3')
   }
+  const beforeDefault = readFileSync(join(root, 'package.json'), 'utf8')
+  const defaultSelection = run(root, 'ci-compatibility.mjs', ['select', defaultVersion])
+  assert.equal(defaultSelection.status, 0, defaultSelection.stderr)
+  assert.equal(defaultSelection.stdout.trim(), 'changed=false')
+  assert.equal(readFileSync(join(root, 'package.json'), 'utf8'), beforeDefault)
   for (const version of Object.keys(manifest.dshCompatibility)) {
     const result = run(root, 'ci-compatibility.mjs', ['select', version])
     assert.equal(result.status, 0, result.stderr)
@@ -54,6 +64,10 @@ test('compatibility matrix selects the exact Node 24 development cohort', () => 
         : name in cohortPackages ? manifest.dshCompatibility[version][cohortPackages[name]] : value)
     }
     assert.deepEqual(selected.peerDependencies, manifest.peerDependencies)
+    assert.equal(selected.overrides['@deepseek-ai/dsh-scope'], version)
+    assert.equal(selected.overrides['@deepseek-ai/cordis'], manifest.dshCompatibility[version].cordis)
+    assert.equal(selected.overrides['@deepseek-ai/cordis-plugin-loader'], manifest.dshCompatibility[version].loader)
+    assert.equal(selected.overrides['@deepseek-ai/schemastery'], manifest.dshCompatibility[version].schemastery)
     assert.equal(run(root, 'ci-compatibility.mjs', ['select', version]).stdout.trim(), 'changed=false')
   }
   assert.notEqual(run(root, 'ci-compatibility.mjs', ['select', 'latest']).status, 0)
@@ -76,7 +90,7 @@ test('verification records failures, continues independent checks and summarizes
   writeFileSync(npm, `#!${process.execPath}\nprocess.exit(process.argv.includes(process.env.FAIL_STEP) ? 1 : 0)\n`)
   chmodSync(npm, 0o755)
   const major = process.versions.node.split('.')[0]
-  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.2-rc.2', FAIL_STEP: 'typecheck' }
+  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.2-rc.3', FAIL_STEP: 'typecheck' }
   const result = run(root, 'ci-verify.mjs', ['verify', major], env)
   assert.equal(result.status, 1, result.stderr)
   let report = JSON.parse(readFileSync(join(root, `artifacts/ci/node-${major}.json`)))
@@ -99,8 +113,13 @@ test('workflow isolates PR validation from tag-only publishing with no artifact 
   assert.equal(workflow.jobs.publish.needs, undefined)
   assert.equal(workflow.jobs.publish.permissions['id-token'], 'write')
   const steps = workflow.jobs.verify.steps
+  const at = id => steps.findIndex(s => s.id === id)
+  assert.ok(at('npm24') >= 0 && at('setup-cohort') < at('npm24') && at('npm24') < at('cohort'))
+  assert.equal(steps[at('npm24')].run, 'npm install --global npm@11.19.0')
   assert.equal(steps.find(s => s.id === 'setup-cohort').with['node-version'], '24.9.0')
   assert.ok(!steps.some(s => ['setup22', 'verify22', 'smoke'].includes(s.id)))
+  assert.match(steps.find(s => s.id === 'cohort').run, /committed-package-lock\.json/)
+  assert.match(steps.find(s => s.id === 'cohort').run, /--legacy-peer-deps=false/)
   assert.match(steps.find(s => s.id === 'verify24').if, /steps\.cohort\.outcome == 'success'/)
   assert.match(steps.find(s => s.id === 'verify24').if, /!cancelled\(\)/)
   assert.doesNotMatch(steps.find(s => s.id === 'verify24').if, /verify22|smoke/)
