@@ -96,7 +96,7 @@ Restart DSH Web and refresh the page after installation. Run `dsh --profile web 
 
 ### 1. Configure the translation method
 
-Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. The translation card stays expanded, so you can directly choose a translation type and configure the service. The card's enable and language controls are global defaults for new sessions and sessions without their own quick choices; saving shared service configuration does not overwrite existing per-conversation choices. Use the card footer to save or discard changes.
+Open **Plugins → dsh-prompt-translation**. Translation is disabled by default. The translation card starts collapsed; click its header to expand it, choose a translation type, and configure the service. The card's enable and language controls are global defaults for new sessions and sessions without their own quick choices; saving shared service configuration does not overwrite existing per-conversation choices. Use the card footer to save or discard changes.
 
 | Traditional translation service | Required settings | API |
 | --- | --- | --- |

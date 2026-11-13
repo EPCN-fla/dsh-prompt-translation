@@ -61,15 +61,21 @@ it('collapses plugin settings by default and toggles through an accessible heade
   await act(async () => root.render(createElement(SettingsCard, f.props)))
   const header = host.querySelector('button.dsh-pt-card-header') as HTMLButtonElement
   const form = host.querySelector('form')!
+  const chevron = header.querySelector('.dsh-pt-card-chevron')!
   expect(header.getAttribute('aria-expanded')).toBe('false')
   expect(header.getAttribute('aria-controls')).toBe(form.id)
-  expect(header.querySelector('svg')).not.toBeNull()
+  expect(header.getAttribute('aria-describedby')).toBe(host.querySelector('.dsh-pt-card-description')?.id)
+  expect(chevron).not.toBeNull()
+  expect(chevron.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 14 14')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(false)
   expect(form.hidden).toBe(true)
   await act(async () => header.click())
   expect(header.getAttribute('aria-expanded')).toBe('true')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(true)
   expect(form.hidden).toBe(false)
   await act(async () => header.click())
   expect(header.getAttribute('aria-expanded')).toBe('false')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(false)
   expect(form.hidden).toBe(true)
 })
 it('retains edited configuration and displays failure when saving is rejected', async () => {

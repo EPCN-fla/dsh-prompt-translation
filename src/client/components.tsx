@@ -53,9 +53,23 @@ export function LanguageSelect({ source, value, onChange, disabled, compact }: {
     {Object.entries(languages).filter(([key]) => source || key !== 'auto').map(([key, label]) => <option key={key} value={key}>{label}</option>)}
   </select></label>
 }
+/** The official ic_ds_chevron_down_outline_14 icon (verbatim path). */
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <span className={`dsh-pt-card-chevron${open ? ' dsh-pt-card-chevron-open' : ''}`} aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z"
+          fill="currentColor"
+        />
+      </svg>
+    </span>
+  )
+}
 export function SettingsCard(props: Props) {
   const state = useSettings(props)
   const catalogId = useId()
+  const descriptionId = useId()
   const bodyId = useId()
   const [expanded, setExpanded] = useState(false)
   const { value, save, disabled } = state
@@ -102,10 +116,10 @@ export function SettingsCard(props: Props) {
     void save(changes).then(ok => { if (ok) { setPatch({}); setExpanded(false) } })
   }
   return <section className={`dsh-pt-card${expanded ? ' dsh-pt-card-open' : ''}`}>
-    <button type="button" className="dsh-pt-card-header" aria-expanded={expanded} aria-controls={bodyId} onClick={() => setExpanded(current => !current)}>
-      <span className="dsh-pt-head-text"><span role="heading" aria-level={3} className="dsh-pt-card-name">提示词与输出翻译</span><span className="dsh-pt-card-description">输入译向目标语言，思考与回答译回原始语言。</span></span>
+    <button type="button" className="dsh-pt-card-header" aria-expanded={expanded} aria-controls={bodyId} aria-describedby={descriptionId} onClick={() => setExpanded(current => !current)}>
+      <span className="dsh-pt-head-text"><span role="heading" aria-level={3} className="dsh-pt-card-name">提示词与输出翻译</span><span id={descriptionId} className="dsh-pt-card-description">输入译向目标语言，思考与回答译回原始语言。</span></span>
       {dirty && <span className="dsh-pt-tag">未保存</span>}
-      <svg className="dsh-pt-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+      <ChevronIcon open={expanded} />
     </button>
     <form id={bodyId} className="dsh-pt-card-body" hidden={!expanded} onSubmit={event => { event.preventDefault(); submit() }}>
     <fieldset disabled={disabled} className="dsh-pt-fields">
