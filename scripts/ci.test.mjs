@@ -44,12 +44,22 @@ test('compatibility matrix selects the exact Node 24 development cohort', () => 
   assert.equal(manifest.engines.node, '>=24.9.0')
   assert.equal(manifest.engines.dsh, '0.2.2-rc.2 || 0.2.2-rc.3')
   const defaultVersion = Object.keys(manifest.dshCompatibility).at(-1)
+  const activeVersion = process.env.DSH_TEST_VERSION || defaultVersion
   for (const [name, range] of Object.entries(manifest.devDependencies)) {
-    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, defaultVersion)
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, activeVersion)
   }
   for (const [name, range] of Object.entries(manifest.peerDependencies)) {
     if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2 || 0.2.2-rc.3')
   }
+  const cleanDefault = structuredClone(manifest)
+  delete cleanDefault.overrides
+  for (const name of Object.keys(cleanDefault.devDependencies)) {
+    if (name.startsWith('@deepseek-ai/dsh-')) cleanDefault.devDependencies[name] = defaultVersion
+  }
+  for (const [key, name] of Object.entries(cohortPackages)) {
+    cleanDefault.devDependencies[name] = manifest.dshCompatibility[defaultVersion][key]
+  }
+  writeFileSync(join(root, 'package.json'), JSON.stringify(cleanDefault))
   const beforeDefault = readFileSync(join(root, 'package.json'), 'utf8')
   const defaultSelection = run(root, 'ci-compatibility.mjs', ['select', defaultVersion])
   assert.equal(defaultSelection.status, 0, defaultSelection.stderr)
@@ -58,6 +68,7 @@ test('compatibility matrix selects the exact Node 24 development cohort', () => 
   for (const version of Object.keys(manifest.dshCompatibility)) {
     const result = run(root, 'ci-compatibility.mjs', ['select', version])
     assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stdout.trim(), 'changed=true')
     const selected = JSON.parse(readFileSync(join(root, 'package.json')))
     for (const [name, value] of Object.entries(manifest.devDependencies)) {
       assert.equal(selected.devDependencies[name], name.startsWith('@deepseek-ai/dsh-') ? version
