@@ -35,10 +35,11 @@
 
 ## 安装
 
-插件版本与 DSH 版本对应关系矩阵如下。插件 0.2.0 仅适配 DSH 0.2.2-rc.2，并要求 Node.js >=24.9.0；旧版插件的适配范围仅作历史参考。
+插件版本与 DSH 版本对应关系矩阵如下。插件 0.2.1 适配 DSH 0.2.2-rc.2 与 0.2.2-rc.3，并要求 Node.js >=24.9.0；插件 0.2.0 仅适配 DSH 0.2.2-rc.2；旧版插件的适配范围仅作历史参考。
 
 | 插件版本 | 最低适配的 DSH 版本 | 最高适配的 DSH 版本 |
 | --- | --- | --- |
+| 0.2.1 | 0.2.2-rc.2 | 0.2.2-rc.3 |
 | 0.2.0 | 0.2.2-rc.2 | 0.2.2-rc.2 |
 | 0.1.6 | 0.2.0-rc.1 | 0.2.2-rc.1 |
 | 0.1.5 | 0.2.0-rc.1 | 0.2.2-rc.1 |
@@ -95,7 +96,7 @@ dsh plugin --profile web add /absolute/path/to/dsh-prompt-translation
 
 ### 1. 配置翻译方式
 
-打开「插件 → dsh-prompt-translation」。插件默认关闭翻译；翻译卡片固定展开，可直接选择翻译类型并配置服务。卡片中的「启用翻译」和语言选项是新会话及未单独设置会话的 全局默认值；保存服务配置不会覆盖已有会话的快捷选择。卡片底部可保存设置或放弃修改。
+打开「插件 → dsh-prompt-translation」。插件默认关闭翻译；翻译卡片默认折叠，点击头部可展开并选择翻译类型与配置服务。卡片中的「启用翻译」和语言选项是新会话及未单独设置会话的 全局默认值；保存服务配置不会覆盖已有会话的快捷选择。卡片底部可保存设置或放弃修改。
 
 | 传统翻译服务 | 所需配置 | 接口 |
 | --- | --- | --- |
@@ -203,9 +204,9 @@ npm run build
 npm run pack:check
 npm run test:browser
 
-# 完整 Web 验证：安装精确版本的隔离宿主，再运行
-npm run host:install -- 0.2.2-rc.2
-npm run test:host -- 0.2.2-rc.2
+# 完整 Web 验证：安装精确版本的隔离宿主，再运行（支持 0.2.2-rc.2 或 0.2.2-rc.3）
+npm run host:install -- 0.2.2-rc.3
+npm run test:host -- 0.2.2-rc.3
 ```
 
 `npm run check` 汇总类型检查、测试、构建和安装包检查。构建输出在 `lib/`，安装包与证据在 `artifacts/`。Chrome 默认路径可通过 `CHROME_PATH` 覆盖，Playwright channel 可通过 `CHROME_CHANNEL` 覆盖。`.npmrc` 使用 `legacy-peer-deps=true`，宿主安装脚本按精确版本补齐必需 peer，避免混装 DSH 预发布版本。
@@ -223,7 +224,7 @@ npm run test:host -- 0.2.2-rc.2
 | `scripts/browser-smoke.mjs` | 构建后的浏览器模块、按钮位置、桌面与移动视口 |
 | `scripts/full-host-smoke.mjs` | 精确版本的完整 Web 冷启动、独立 YAML 重载、双会话独立开关和用户回合 |
 
-CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵；当前仅包含 DSH 0.2.2-rc.2，并从首次安装起只使用 Node 24（>=24.9.0）。每个 job 选择完整的 DSH/Cordis/Loader/Schemastery 开发 cohort，验证类型检查、单元及脚本测试、构建、安装包、浏览器和精确版本完整 Web 宿主，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
+CI 仅在 PR 和 `v*` 标签推送时触发，普通分支推送不运行。PR 从 `package.json` 的 `dshCompatibility` 读取精确版本矩阵；当前包含 DSH 0.2.2-rc.2 与 0.2.2-rc.3，并从首次安装起只使用 Node 24（>=24.9.0）。每个 job 选择完整的 DSH/Cordis/Loader/Schemastery 开发 cohort，验证类型检查、单元及脚本测试、构建、安装包、浏览器和精确版本完整 Web 宿主，结果写入 Actions Summary。`v*` 标签独立执行版本门禁、构建和 npm OIDC 发布，不运行测试，也不依赖 PR job；打标签前应确保对应提交的 PR 检查通过。预发布使用 `next`，稳定版使用 `latest` 并禁止版本回退。CI 不上传 artifacts，也不创建 GitHub Release；临时安装包和测试证据仅留在 runner。
 
 ## 许可证
 

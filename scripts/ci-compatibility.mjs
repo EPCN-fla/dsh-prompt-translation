@@ -1,5 +1,5 @@
 /** Dependency-free CI metadata reader; package.json is the compatibility source. */
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
@@ -55,6 +55,8 @@ function main() {
     const packages = Object.keys(dependencies ?? {}).filter(name => name.startsWith('@deepseek-ai/dsh-'))
     const missing = Object.values(cohortPackages).filter(name => !dependencies?.[name])
     if (packages.length === 0 || missing.length) throw new Error(`Missing DSH/cohort development dependencies: ${missing.join(', ')}`)
+    const cohortChanged = packages.some(name => dependencies[name] !== version)
+      || Object.entries(cohortPackages).some(([key, name]) => dependencies[name] !== entries[version][key])
     for (const name of packages) {
       if (dependencies[name] !== version) { dependencies[name] = version; changed = true }
     }
@@ -63,6 +65,25 @@ function main() {
       if (dependencies[name] !== selected) {
         dependencies[name] = selected
         changed = true
+      }
+    }
+    // Older DSH cohorts used prerelease ranges for runtime peers. Pin every
+    // package present in the committed lock plus historical peers absent from
+    // it, so npm cannot select a later RC. CI never commits these overrides.
+    if ((cohortChanged || manifest.overrides !== undefined) && existsSync('package-lock.json')) {
+      const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
+      const names = new Set(packages)
+      for (const path of Object.keys(lock.packages ?? {})) {
+        const match = /(?:^|\/)node_modules\/(@deepseek-ai\/dsh(?:-[^/]+)?)$/.exec(path)
+        if (match) names.add(match[1])
+      }
+      const overrides = manifest.overrides ??= {}
+      for (const name of names) {
+        if (overrides[name] !== version) { overrides[name] = version; changed = true }
+      }
+      for (const [key, name] of Object.entries(cohortPackages)) {
+        const selected = entries[version][key]
+        if (overrides[name] !== selected) { overrides[name] = selected; changed = true }
       }
     }
     if (changed) writeFileSync('package.json', `${JSON.stringify(manifest, null, 2)}\n`)

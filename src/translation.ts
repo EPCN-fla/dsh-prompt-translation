@@ -7,6 +7,46 @@ export type Translator = (text: string, signal?: AbortSignal) => Promise<string>
 const baiduCodes: Record<string, string> = { 'zh-TW': 'cht', ja: 'jp', ko: 'kor', fr: 'fra', es: 'spa', ar: 'ara' }
 const microsoftCodes: Record<string, string> = { zh: 'zh-Hans', 'zh-TW': 'zh-Hant' }
 
+/** Run an async operation bounded by a parent AbortSignal and explicit timeout without leaving dangling timers. */
+export async function withTimeoutSignal<T>(timeoutMs: number, parentSignal: AbortSignal | undefined, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError')), timeoutMs)
+  const signal = parentSignal ? AbortSignal.any([timeout.signal, parentSignal]) : timeout.signal
+  let abort: (() => void) | undefined
+  try {
+    return await Promise.race([fn(signal), new Promise<never>((_, reject) => {
+      abort = () => reject(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      if (signal.aborted) abort()
+    })])
+  } finally {
+    clearTimeout(timer)
+    if (abort) signal.removeEventListener('abort', abort)
+  }
+}
+
+/** Collect streamed text blocks ordered by chunk index. */
+export async function streamModelText(
+  llm: ModelRuntime,
+  request: GenerateOptions,
+  signal: AbortSignal,
+  messages: { incomplete: (kind: string) => string; unfinished: string },
+): Promise<string> {
+  const blocks = new Map<number, string>()
+  let completed = false
+  for await (const chunk of llm.stream(request)) {
+    signal.throwIfAborted()
+    if (chunk.type === 'text-delta') blocks.set(chunk.index, (blocks.get(chunk.index) ?? '') + chunk.text)
+    if (chunk.type === 'block-end' && chunk.block.type === 'text') blocks.set(chunk.index, chunk.block.text)
+    if (chunk.type === 'finish') {
+      if (chunk.reason.kind !== 'stop') throw new Error(messages.incomplete(chunk.reason.kind))
+      completed = true
+    }
+  }
+  if (!completed) throw new Error(messages.unfinished)
+  return [...blocks.entries()].sort(([a], [b]) => a - b).map(([, text]) => text).join('')
+}
+
 /** Split by Unicode code points and prefer paragraph/sentence boundaries. */
 export function splitText(text: string, limit: number, maxBytes = Infinity): string[] {
   if (!Number.isInteger(limit) || limit < 1 || maxBytes < 4) throw new Error('无效的翻译分段上限')
@@ -82,7 +122,10 @@ export async function traditional(text: string, options: Options, signal: AbortS
   if (options.engine === 'baidu') {
     const data = record(body)
     if (typeof data.from === 'string') detected?.(data.from)
-    if (data.error_code !== undefined) throw new Error(`百度翻译失败（${String(data.error_code).replace(/[^0-9]/g, '')}）`)
+    if (data.error_code !== undefined && data.error_code !== null && String(data.error_code) !== '52000') {
+      const code = String(data.error_code).replace(/[^0-9]/g, '') || '未知错误'
+      throw new Error(`百度翻译失败（${code}）`)
+    }
     if (!Array.isArray(data.trans_result)) throw new Error('百度翻译缺少 trans_result')
     return translated(data.trans_result.map(row => translated(record(row).dst)).join('\n'))
   }
@@ -119,8 +162,7 @@ export function createTranslator(options: Options, llm: ModelRuntime, fetcher: t
   return async (text, parentSignal) => {
     parentSignal?.throwIfAborted()
     if (!text.trim() || options.source === options.target) return text
-    const signal = AbortSignal.any([AbortSignal.timeout(options.timeoutMs), ...(parentSignal ? [parentSignal] : [])])
-    const operation = async (): Promise<string> => {
+    return withTimeoutSignal(options.timeoutMs, parentSignal, async signal => {
       const results: string[] = []
       for (const part of splitText(text, options.maxChars, options.type === 'traditional' && options.engine === 'baidu' ? 6000 : Infinity)) {
         signal.throwIfAborted()
@@ -140,34 +182,15 @@ export function createTranslator(options: Options, llm: ModelRuntime, fetcher: t
             messages: [{ role: 'user', content: [{ type: 'text', text: core }] }],
             ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort as GenerateOptions['reasoningEffort'] } : {}),
           }
-          const blocks = new Map<number, string>()
-          let completed = false
-          for await (const chunk of llm.stream(request)) {
-            signal.throwIfAborted()
-            if (chunk.type === 'text-delta') blocks.set(chunk.index, (blocks.get(chunk.index) ?? '') + chunk.text)
-            if (chunk.type === 'block-end' && chunk.block.type === 'text') blocks.set(chunk.index, chunk.block.text)
-            if (chunk.type === 'finish') {
-              if (chunk.reason.kind !== 'stop') throw new Error(`智能体翻译未完整完成（${chunk.reason.kind}）`)
-              completed = true
-            }
-          }
-          if (!completed) throw new Error('智能体翻译流缺少结束标记')
-          output = translated([...blocks.values()].join(''))
+          const raw = await streamModelText(llm, request, signal, {
+            incomplete: kind => `智能体翻译未完整完成（${kind}）`,
+            unfinished: '智能体翻译流缺少结束标记',
+          })
+          output = translated(raw)
         }
         results.push(leading + output.trim() + trailing)
       }
       return results.join('')
-    }
-    // An adapter that ignores its AbortSignal must not keep the user's turn waiting forever.
-    let abort: (() => void) | undefined
-    try {
-      return await Promise.race([operation(), new Promise<never>((_, reject) => {
-        abort = () => reject(signal.reason)
-        signal.addEventListener('abort', abort, { once: true })
-        if (signal.aborted) abort()
-      })])
-    } finally {
-      if (abort) signal.removeEventListener('abort', abort)
-    }
+    })
   }
 }

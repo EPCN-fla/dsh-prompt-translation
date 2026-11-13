@@ -53,12 +53,15 @@ export function presentAssistant(view: AssistantView, content: readonly unknown[
 /** Adapt existing host definitions so native bubble actions, themes and attachments survive. */
 export function installPresentation(registry: EventRegistry): () => void {
   const wrapped = new Map<Definition, { original: NonNullable<Definition['buildViewNode']>; wrapper: NonNullable<Definition['buildViewNode']> }>()
+  let active = true
   const reconcile = () => {
+    if (!active) return
     for (const definition of registry.entries()) {
       if (wrapped.has(definition) || !definition.buildViewNode) continue
       if (definition.kind !== 'input-message' && definition.kind !== 'trajectory-input-message' && definition.kind !== 'trajectory-assistant-step') continue
       const original = definition.buildViewNode
       const wrapper: NonNullable<Definition['buildViewNode']> = function (this: unknown, ...args) {
+        if (!active) return original.apply(this, args)
         const node = original.apply(this, args)
         if (!node) return node
         if (definition.kind === 'trajectory-assistant-step') {
@@ -81,6 +84,7 @@ export function installPresentation(registry: EventRegistry): () => void {
   // Public registry registration invalidates already-open view assemblies too.
   const remove = registry.register({ kind: 'dsh-prompt-translation-presentation', match: () => null, start: () => undefined, update: () => undefined, publication: () => 'none' })
   return () => {
+    active = false
     stop()
     for (const [definition, { original, wrapper }] of wrapped) if (definition.buildViewNode === wrapper) definition.buildViewNode = original
     wrapped.clear()

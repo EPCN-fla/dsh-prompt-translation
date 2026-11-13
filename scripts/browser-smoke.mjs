@@ -8,7 +8,7 @@ const server = createServer(async (req, res) => {
   if (req.url === '/fixture.js' || req.url === '/client.js') {
     res.setHeader('Content-Type', 'text/javascript')
     res.end(await readFile(req.url === '/fixture.js' ? 'artifacts/browser-fixture.js' : 'lib/client.js'))
-  } else res.end(`<!doctype html><html lang="zh"><meta charset="utf-8"><title>Translation browser fixture</title><style>body{font:14px system-ui;margin:30px;background:#171a20;color:#e5e7eb}#composer{margin-top:300px;padding:20px;border:1px solid #555;border-radius:14px;display:flex;align-items:center}#modes{display:flex;gap:8px;align-items:center}button{cursor:pointer} [data-slot]{display:contents}</style><h1>提示词翻译 0.1.0</h1><div data-slot="plugins.bundle.config"></div><div id="composer"><div id="modes"><div data-slot="conversation.input.permission"><button>权限</button></div><div data-slot="conversation.input.plan"><button>计划</button></div></div><div data-slot="conversation.input.left"></div></div><script src="/fixture.js"></script><script src="/client.js"></script></html>`)
+  } else res.end(`<!doctype html><html lang="zh"><meta charset="utf-8"><title>Translation browser fixture</title><style>body{font:14px system-ui;margin:30px;background:#171a20;color:#e5e7eb}#composer{margin-top:300px;padding:20px;border:1px solid #555;border-radius:14px;display:flex;align-items:center}#modes{display:flex;gap:8px;align-items:center}button{cursor:pointer} [data-slot]{display:contents}</style><h1>提示词翻译</h1><div data-slot="plugins.bundle.config"></div><div id="composer"><div id="modes"><div data-slot="conversation.input.permission"><button>权限</button></div><div data-slot="conversation.input.plan"><button>计划</button></div></div><div data-slot="conversation.input.left"></div></div><script src="/fixture.js"></script><script src="/client.js"></script></html>`)
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 let browser
@@ -19,11 +19,14 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}`)
   const settingsCard = page.locator('.dsh-pt-card')
   const settingsToggle = settingsCard.locator('button.dsh-pt-card-header')
+  const settingsChevron = settingsToggle.locator('.dsh-pt-card-chevron')
   assert.equal(await settingsCard.locator('form').isVisible(), false)
   assert.equal(await settingsToggle.getAttribute('aria-expanded'), 'false')
+  assert.equal(await settingsChevron.evaluate(el => el.classList.contains('dsh-pt-card-chevron-open')), false)
   await settingsToggle.click()
   assert.equal(await settingsCard.locator('form').isVisible(), true)
   assert.equal(await settingsToggle.getAttribute('aria-expanded'), 'true')
+  assert.equal(await settingsChevron.evaluate(el => el.classList.contains('dsh-pt-card-chevron-open')), true)
   await page.getByRole('button', { name: '翻译', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '快捷翻译设置' })
   await dialog.getByLabel('原始语言').selectOption('ja')

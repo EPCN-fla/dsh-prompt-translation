@@ -1,6 +1,6 @@
 {
   "name": "dsh-prompt-translation",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Prompt, reasoning and response translation for DeepSeek Harness",
   "icon": "./icon.svg",
   "license": "MIT",
@@ -46,6 +46,12 @@
       "loader": "1.1.0",
       "schemastery": "3.19.0",
       "node": 24
+    },
+    "0.2.2-rc.3": {
+      "cordis": "4.1.0",
+      "loader": "1.1.0",
+      "schemastery": "3.19.0",
+      "node": 24
     }
   },
   "scripts": {
@@ -56,21 +62,21 @@
     "prepare": "npm run build",
     "test:scripts": "node --test scripts/*.test.mjs",
     "test:browser": "node scripts/browser-smoke.mjs",
-    "pack:check": "node scripts/package-artifact.mjs",
+    "pack:check": "npm run build && node scripts/package-artifact.mjs",
     "host:install": "node scripts/install-host.mjs",
     "test:host": "node scripts/full-host-smoke.mjs",
     "check": "npm run typecheck && npm test && npm run test:scripts && npm run pack:check"
   },
   "engines": {
     "node": ">=24.9.0",
-    "dsh": "0.2.2-rc.2"
+    "dsh": "0.2.2-rc.2 || 0.2.2-rc.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.2 || 0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.2 || 0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2 || 0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.2 || 0.2.2-rc.3",
     "@deepseek-ai/schemastery": "3.19.0",
     "react": "^18.2.0 || ^19.0.0",
     "react-dom": "^18.2.0 || ^19.0.0"
@@ -78,11 +84,11 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/cordis-plugin-loader": "1.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-error": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
-    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-error": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.3",
     "@deepseek-ai/schemastery": "3.19.0",
     "@types/node": "^24.0.0",
     "@types/react": "^18.3.1",

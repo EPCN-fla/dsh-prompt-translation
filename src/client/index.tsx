@@ -22,16 +22,27 @@ export function apply(ctx: ClientContext): void {
   ctx.inject?.(['uiConversation'], child => { child.effect(() => installPresentation(child.uiConversation.events)) })
   const listeners = new Set<() => void>()
   const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
-  const refresh = () => { for (const listener of listeners) listener() }
-  const props = { api: createSettingsApi(ctx.connection.rpc, refresh), catalog: ctx.remote.session, subscribe }
+  const refresh = () => {
+    for (const listener of [...listeners]) {
+      try { listener() }
+      catch (error) { console.warn('[dsh-prompt-translation] settings listener failed', error) }
+    }
+  }
+  const props: Props = { api: createSettingsApi(ctx.connection.rpc, refresh), catalog: ctx.remote.session, subscribe }
+  const quickProps = new Map<string, Props & { sessionId: string }>()
+  const quickPropsFor = (sessionId: string) => {
+    let cached = quickProps.get(sessionId)
+    if (!cached) { cached = { ...props, sessionId }; quickProps.set(sessionId, cached) }
+    return cached
+  }
   ctx.effect(() => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', id: name, key: name, inject: () => props }, SettingsCard)))
-  ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: name, order: -1000, inject: (sessionId: string) => ({ ...props, sessionId }) }, QuickPicker)))
+  ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: name, order: -1000, inject: quickPropsFor }, QuickPicker)))
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.dshPromptTranslation = ''
     style.textContent = css
     document.head.append(style)
     const reconnect = ctx.on('connection/reset', refresh)
-    return () => { reconnect(); style.remove(); listeners.clear() }
+    return () => { reconnect(); style.remove(); listeners.clear(); quickProps.clear() }
   })
 }

@@ -61,15 +61,21 @@ it('collapses plugin settings by default and toggles through an accessible heade
   await act(async () => root.render(createElement(SettingsCard, f.props)))
   const header = host.querySelector('button.dsh-pt-card-header') as HTMLButtonElement
   const form = host.querySelector('form')!
+  const chevron = header.querySelector('.dsh-pt-card-chevron')!
   expect(header.getAttribute('aria-expanded')).toBe('false')
   expect(header.getAttribute('aria-controls')).toBe(form.id)
-  expect(header.querySelector('svg')).not.toBeNull()
+  expect(header.getAttribute('aria-describedby')).toBe(host.querySelector('.dsh-pt-card-description')?.id)
+  expect(chevron).not.toBeNull()
+  expect(chevron.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 14 14')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(false)
   expect(form.hidden).toBe(true)
   await act(async () => header.click())
   expect(header.getAttribute('aria-expanded')).toBe('true')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(true)
   expect(form.hidden).toBe(false)
   await act(async () => header.click())
   expect(header.getAttribute('aria-expanded')).toBe('false')
+  expect(chevron.classList.contains('dsh-pt-card-chevron-open')).toBe(false)
   expect(form.hidden).toBe(true)
 })
 it('retains edited configuration and displays failure when saving is rejected', async () => {
@@ -86,6 +92,8 @@ it('retains edited configuration and displays failure when saving is rejected', 
   expect(select.value).toBe('fr')
   expect((host.querySelector('form') as HTMLFormElement).hidden).toBe(false)
   expect(host.querySelector('.dsh-pt-card-header')?.getAttribute('aria-expanded')).toBe('true')
+  await act(async () => (host.querySelector('.dsh-pt-card-footer button[type=button]') as HTMLButtonElement).click())
+  expect(host.querySelector('[role="alert"]')).toBeNull()
 })
 it('collapses settings after a successful save', async () => {
   const f = fixture()
@@ -165,11 +173,14 @@ it('uses an icon-only toggle state and a single compact language row', async () 
   expect(button.textContent).toBe('')
   expect(button.querySelector('[data-translation-disabled]')).not.toBeNull()
   await act(async () => button.click())
-  const row = host.querySelector('.dsh-pt-language-row')!
+  const dialog = document.body.querySelector('.dsh-pt-popover')!
+  expect(dialog).not.toBeNull()
+  expect(host.contains(dialog)).toBe(false)
+  const row = dialog.querySelector('.dsh-pt-language-row')!
   expect(row.querySelectorAll('select')).toHaveLength(2)
   expect([...row.querySelectorAll('label')].every(label => label.childNodes.length === 1)).toBe(true)
-  expect(host.querySelector('.dsh-pt-scope')).toBeNull()
-  await act(async () => (host.querySelector('input[type=checkbox]') as HTMLInputElement).click())
+  expect(dialog.querySelector('.dsh-pt-scope')).toBeNull()
+  await act(async () => (dialog.querySelector('input[type=checkbox]') as HTMLInputElement).click())
   expect(button.querySelector('[data-translation-disabled]')).toBeNull()
   expect(f.current.enabled).toBe(false)
   expect(f.current.sessionOverrides?.['session-a']?.enabled).toBe(true)
@@ -197,7 +208,7 @@ it('keeps quick choices independent between two conversations', async () => {
   const aButton = aHost.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
   const bButton = bHost.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
   await act(async () => aButton.click())
-  await act(async () => (aHost.querySelector('input[type=checkbox]') as HTMLInputElement).click())
+  await act(async () => (document.body.querySelector('.dsh-pt-popover input[type=checkbox]') as HTMLInputElement).click())
   await act(async () => { for (const listener of f.listeners) listener() })
   expect(f.current.enabled).toBe(false)
   expect(f.current.sessionOverrides?.['session-a']?.enabled).toBe(true)
@@ -224,14 +235,15 @@ it('does not expose the previous conversation controls while the next one is loa
   await act(async () => root.render(createElement(QuickPicker, { ...f.props, sessionId: 'session-b' })))
   expect(button.getAttribute('data-enabled')).toBe('false')
   await act(async () => button.click())
-  const checkbox = host.querySelector('input[type=checkbox]') as HTMLInputElement
+  const dialog = document.body.querySelector('.dsh-pt-popover')!
+  const checkbox = dialog.querySelector('input[type=checkbox]') as HTMLInputElement
   expect(checkbox.disabled).toBe(true)
   expect(checkbox.checked).toBe(false)
-  expect((host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('auto')
+  expect((dialog.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('auto')
   await act(async () => loadB!({ ok: true, value: { writable: true, namespaces: [{ ns: 'prompt-translation', revision: 2, value: f.current }] } }))
   expect(checkbox.disabled).toBe(false)
   expect(checkbox.checked).toBe(false)
-  expect((host.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('fr')
+  expect((dialog.querySelector('[aria-label="原始语言"]') as HTMLSelectElement).value).toBe('fr')
 })
 
 it('discards staged settings in the expanded themed card', async () => {
@@ -247,4 +259,109 @@ it('discards staged settings in the expanded themed card', async () => {
   expect(select.value).toBe('auto')
   expect(host.querySelector('.dsh-pt-tag')).toBeNull()
   expect((host.querySelector('.dsh-pt-card-body') as HTMLElement).hidden).toBe(false)
+})
+
+it('fetches modelCatalog once, validates number bounds, clears errors on discard and avoids double refresh', async () => {
+  const f = fixture()
+  const modelCatalog = vi.fn(async () => ({
+    ok: true as const,
+    value: { groups: [{ id: 'p1', name: 'P1', models: [{ id: 'm1', name: 'M1' }] }] },
+  }))
+  const baseMutate = f.api.mutate
+  f.api.mutate = vi.fn<SettingsApi['mutate']>(async (ns, ops, rev) => {
+    const res = await baseMutate(ns, ops, rev)
+    for (const listener of f.listeners) listener()
+    return res
+  })
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(SettingsCard, { ...f.props, catalog: { modelCatalog } })))
+  expect(modelCatalog).toHaveBeenCalledTimes(1)
+  await act(async () => (host.querySelector('.dsh-pt-card-header') as HTMLButtonElement).click())
+  const typeSelect = [...host.querySelectorAll('select')].find(el => el.value === 'traditional')!
+  await act(async () => { typeSelect.value = 'agent'; typeSelect.dispatchEvent(new Event('change', { bubbles: true })) })
+  const providerInput = host.querySelector('input[list]') as HTMLInputElement
+  await act(async () => { providerInput.value = 'p'; providerInput.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => { providerInput.value = 'p1'; providerInput.dispatchEvent(new Event('input', { bubbles: true })) })
+  expect(modelCatalog).toHaveBeenCalledTimes(1)
+  const setInputValue = (input: HTMLInputElement, next: string) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!.call(input, next)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const numberInput = host.querySelector('input[type=number]') as HTMLInputElement
+  await act(async () => setInputValue(numberInput, ''))
+  await act(async () => (host.querySelector('button[type=submit]') as HTMLButtonElement).click())
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('1000–300000')
+  expect(f.api.mutate).not.toHaveBeenCalled()
+  await act(async () => (host.querySelector('.dsh-pt-card-footer button[type=button]') as HTMLButtonElement).click())
+  expect(host.querySelector('[role="alert"]')).toBeNull()
+  const describeCallsBeforeSave = (f.api.describe as ReturnType<typeof vi.fn>).mock.calls.length
+  const sourceSelect = host.querySelector('select[aria-label="原始语言"]') as HTMLSelectElement
+  await act(async () => { sourceSelect.value = 'ja'; sourceSelect.dispatchEvent(new Event('change', { bubbles: true })) })
+  await act(async () => (host.querySelector('button[type=submit]') as HTMLButtonElement).click())
+  expect((f.api.describe as ReturnType<typeof vi.fn>).mock.calls.length - describeCallsBeforeSave).toBe(2)
+})
+
+it('closes QuickPicker on sessionId change and Escape while isolating listener errors and stabilizing slot props', async () => {
+  const f = fixture()
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(QuickPicker, f.quickProps)))
+  const trigger = host.querySelector('button[aria-label="翻译"]') as HTMLButtonElement
+  await act(async () => trigger.click())
+  expect(document.body.querySelector('.dsh-pt-popover')).not.toBeNull()
+  await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+  expect(document.body.querySelector('.dsh-pt-popover')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+  await act(async () => trigger.click())
+  expect(document.body.querySelector('.dsh-pt-popover')).not.toBeNull()
+  await act(async () => root.render(createElement(QuickPicker, { ...f.props, sessionId: 'session-b' })))
+  expect(document.body.querySelector('.dsh-pt-popover')).toBeNull()
+
+  const registered: Array<{ name: string; inject: (sessionId: string) => Props }> = []
+  let reconnect: (() => void) | undefined
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const disposers: (() => void)[] = []
+  try {
+    apply({
+      effect: fn => { const d = fn(); if (d) disposers.push(d) },
+      on: (_event, cb) => { reconnect = cb; return () => {} },
+      remote: {},
+      connection: { rpc: { call: vi.fn() } },
+      slots: {
+        inject: (_name, fn) => fn(),
+        register: (opts) => { registered.push(opts); return () => {} },
+      },
+    })
+    const quick = registered.find(r => r.name === 'conversation.input.left')!
+    const p1 = quick.inject('s1')
+    const p1Again = quick.inject('s1')
+    expect(p1).toBe(p1Again)
+    const good = vi.fn()
+    p1.subscribe(() => { throw new Error('boom') })
+    p1.subscribe(good)
+    reconnect!()
+    expect(good).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledOnce()
+  } finally {
+    warn.mockRestore()
+    for (const d of disposers.reverse()) d()
+  }
+})
+
+it('ignores a rejected save error if the conversation switched before completion', async () => {
+  const f = fixture()
+  let rejectWrite!: (err: Error) => void
+  f.api.mutate = vi.fn<SettingsApi['mutate']>(() => new Promise((_resolve, reject) => { rejectWrite = reject }))
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host); cleanup.push(() => root.unmount())
+  await act(async () => root.render(createElement(QuickPicker, f.quickProps)))
+  await act(async () => (host.querySelector('button[aria-label="翻译"]') as HTMLButtonElement).click())
+  await act(async () => {
+    (document.body.querySelector('.dsh-pt-popover input[type=checkbox]') as HTMLInputElement).click()
+  })
+  await act(async () => root.render(createElement(QuickPicker, { ...f.props, sessionId: 'session-b' })))
+  await act(async () => { rejectWrite(new Error('stale write failed')); await Promise.resolve() })
+  await act(async () => (host.querySelector('button[aria-label="翻译"]') as HTMLButtonElement).click())
+  expect(document.body.querySelector('.dsh-pt-popover [role="alert"]')).toBeNull()
 })

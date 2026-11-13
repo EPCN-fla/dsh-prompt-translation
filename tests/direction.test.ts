@@ -223,3 +223,41 @@ it('pins a disabled admitted turn even when translation is enabled before its ma
     expect(main).toHaveBeenCalledTimes(2)
   } finally { await ctx.fiber.dispose(); storage.cleanup() }
 })
+
+it('emits a terminal TRANSLATION_FAILED finish chunk when output translation fails and isolates agent teardown', async () => {
+  const ctx = new Context()
+  const llm = { async *stream(): AsyncIterable<StreamChunk> { throw new Error('translator down') } }
+  ctx.reflect.provide('llm', llm)
+  const config = { ...defaults, enabled: true, type: 'agent' as const, provider: 'fixture', model: 'translator', source: 'zh' as const, target: 'en' as const, output: true }
+  const storage = createStorage(config)
+  stubTypert(ctx)
+  apply(ctx, config, storage.store)
+  let agent1Ctx!: Context
+  let agent2Ctx!: Context
+  ctx.plugin(c => { agent1Ctx = c })
+  ctx.plugin(c => { agent2Ctx = c })
+  const userMessage = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '你好' }] })
+  try {
+    // Emit output failure as a terminal finish chunk rather than an uncaught throw.
+    const request = markAgentLoopRequest({ provider: 'fixture', model: 'main', sessionId: 'out-fail' as never, messages: [] })
+    const chunks: StreamChunk[] = []
+    for await (const chunk of ctx.waterfall('llm/stream', request, async function* () {
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'reply' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })) chunks.push(chunk)
+    expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'error', failure: { code: 'TRANSLATION_FAILED', message: 'translator down' } } })
+
+    // A stale agent's teardown must not delete a newer agent's state for the same session.
+    const agent1 = { session: { id: 'shared-session' }, ctx: agent1Ctx } as never
+    const agent2 = { session: { id: 'shared-session' }, ctx: agent2Ctx } as never
+    await ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent: agent1, signal: new AbortController().signal, messages: [userMessage], turn: 1, step: 1 }, async () => ({ kind: 'enter', messages: [userMessage] }))
+    await ctx.waterfall('agent/pre-step', { ...targetModelSelection, agent: agent2, signal: new AbortController().signal, messages: [userMessage], turn: 2, step: 1 }, async () => ({ kind: 'enter', messages: [userMessage] }))
+    await agent1Ctx.fiber.dispose()
+    const afterStaleDispose: StreamChunk[] = []
+    for await (const chunk of ctx.waterfall('llm/stream', markAgentLoopRequest({ provider: 'fixture', model: 'main', sessionId: 'shared-session' as never, messages: [] }), async function* () {
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'reply' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })) afterStaleDispose.push(chunk)
+    expect(afterStaleDispose.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'error', failure: { code: 'TRANSLATION_FAILED' } } })
+  } finally { await ctx.fiber.dispose(); storage.cleanup() }
+})
