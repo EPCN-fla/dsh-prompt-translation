@@ -81,3 +81,17 @@ it('projects assistant comparisons only into trajectory and restores the origina
   dispose()
   expect(definition.buildViewNode).toBe(original)
 })
+
+it('disables residual presentation wrappers on teardown even if another plugin wrapped afterward', () => {
+  const source = { kind: 'user', dshPromptTranslation: { version: 1, source: 'zh', target: 'en', original: [{ type: 'text', text: '原文' }] } }
+  const message = { content: [{ type: 'text', text: 'translated' }], source }
+  const chat: Definition = { kind: 'input-message', buildViewNode: () => ({ data: message }) }
+  const dispose = installPresentation({ entries: () => [chat], subscribe: () => () => {}, register: () => () => {} })
+  const ourWrapper = chat.buildViewNode!
+  const laterWrapper = () => ourWrapper()
+  chat.buildViewNode = laterWrapper
+  expect(chat.buildViewNode()!.data.content).toEqual(source.dshPromptTranslation.original)
+  dispose()
+  expect(chat.buildViewNode).toBe(laterWrapper)
+  expect(chat.buildViewNode()!.data.content).toEqual(message.content)
+})

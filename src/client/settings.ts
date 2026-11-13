@@ -12,8 +12,9 @@ export interface SettingsApi {
   mutate(ns: string, ops: SettingsPathOp[], revision: number): Promise<Reply<unknown>>
 }
 export interface CatalogModel { id: string; name: string; reasoning?: { efforts: { id: string; name: string }[] } }
+export interface CatalogGroup { id: string; name: string; models: CatalogModel[] }
 export interface Catalog {
-  modelCatalog(): Promise<Reply<{ groups: { id: string; name: string; models: CatalogModel[] }[] }>>
+  modelCatalog(): Promise<Reply<{ groups: CatalogGroup[] }>>
 }
 interface Snapshot { value: Options; overrides: SessionOverrides; writable: boolean; revision: number }
 async function readSnapshot(api: SettingsApi): Promise<Snapshot> {
@@ -36,7 +37,8 @@ export async function loadSettings(api: SettingsApi): Promise<{ value: Options; 
 /** Read global defaults with only this Session's complete quick snapshot. */
 export async function loadSessionSettings(api: SettingsApi, sessionId: string): Promise<{ value: Options; writable: boolean }> {
   const snapshot = await readSnapshot(api)
-  return { value: { ...snapshot.value, ...snapshot.overrides[sessionId] }, writable: snapshot.writable }
+  const override = Object.hasOwn(snapshot.overrides, sessionId) ? snapshot.overrides[sessionId] : undefined
+  return { value: override ? { ...snapshot.value, ...override } : snapshot.value, writable: snapshot.writable }
 }
 /** Patch only edited global fields, retrying once against a fresh revision. */
 export async function saveSettings(api: SettingsApi, patch: Partial<Options>): Promise<void> {
@@ -54,7 +56,8 @@ export async function saveSessionSettings(api: SettingsApi, sessionId: string, p
   for (let attempt = 0; attempt < 2; attempt++) {
     const snapshot = await readSnapshot(api)
     if (!snapshot.writable) throw new Error('当前配置只读')
-    const value = quickOptions({ ...snapshot.value, ...snapshot.overrides[sessionId], ...patch })
+    const existing = Object.hasOwn(snapshot.overrides, sessionId) ? snapshot.overrides[sessionId] : undefined
+    const value = quickOptions({ ...snapshot.value, ...existing, ...patch })
     const result = await api.mutate(namespace, [{ op: 'set', path: ['sessionOverrides', sessionId], value }], snapshot.revision)
     if (result.ok) return
     if (attempt === 0 && result.error.code === 'settings/conflict') continue
