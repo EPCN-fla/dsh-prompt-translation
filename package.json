@@ -1,6 +1,6 @@
 {
   "name": "dsh-prompt-translation",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Prompt, reasoning and response translation for DeepSeek Harness",
   "icon": "./icon.svg",
   "license": "MIT",
