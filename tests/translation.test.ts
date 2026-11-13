@@ -95,3 +95,17 @@ it('limits Baidu sections by UTF-8 bytes as well as characters', async () => {
 it('does not disclose prompt text from a malformed upstream JSON body', async () => {
   await expect(traditional('private prompt', { ...defaults, apiKey: 'secret' }, signal(), vi.fn().mockResolvedValue(new Response('private prompt and secret')))).rejects.toThrow('google 翻译接口返回无效 JSON')
 })
+
+it('handles null or success Baidu error codes and sorts streamed blocks by chunk index', async () => {
+  const nullErrFetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error_code: null, trans_result: [{ dst: 'ok' }] }))
+  expect(await traditional('hi', { ...defaults, engine: 'baidu', apiKey: 'k', appId: 'a' }, signal(), nullErrFetcher)).toBe('ok')
+  const okCodeFetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error_code: '52000', trans_result: [{ dst: 'ok2' }] }))
+  expect(await traditional('hi', { ...defaults, engine: 'baidu', apiKey: 'k', appId: 'a' }, signal(), okCodeFetcher)).toBe('ok2')
+
+  const llm = { async *stream(): AsyncIterable<StreamChunk> {
+    yield { type: 'block-end', index: 2, block: { type: 'text', text: 'world' } }
+    yield { type: 'text-delta', index: 0, text: 'Hello ' }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  } }
+  expect(await createTranslator({ ...defaults, type: 'agent', provider: 'p', model: 'm' }, llm)('x')).toBe('Hello world')
+})

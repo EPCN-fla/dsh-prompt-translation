@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
-import { TranslationStore } from '../src/store.js'
+import { homedir } from 'node:os'
+import { defaultStorePath, TranslationStore } from '../src/store.js'
+import { readConfig, readSessionConfig } from '../src/config.js'
 import { defaults } from '../src/options.js'
 import { createStorage } from './storage.js'
 
@@ -51,4 +53,31 @@ it('fails loudly on malformed stored configuration and never creates a file on r
     writeFileSync(path, 'enabled: true\nsessionOverrides:\n  broken:\n    enabled: true\n')
     expect(() => new TranslationStore(path)).toThrow()
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+it('rejects prototype keys and invalid field values with settings/rejected and ignores empty DSH_HOME', () => {
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = '   '
+  try {
+    expect(defaultStorePath()).toBe(join(homedir(), '.dsh', 'prompt-translation.yml'))
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+  expect(readConfig({ provider: null as never, model: {} as never })).toEqual(defaults)
+  const storage = createStorage()
+  const { store } = storage
+  try {
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      expect(() => store.mutate([{ op: 'set', path: ['sessionOverrides', key], value: { enabled: true, source: 'zh', target: 'en' } }], store.revision))
+        .toThrowError(expect.objectContaining({ code: 'settings/rejected' }))
+    }
+    expect(() => store.mutate([{ op: 'set', path: ['timeoutMs'], value: 10 }], store.revision))
+      .toThrowError(expect.objectContaining({ code: 'settings/rejected' }))
+    expect(() => store.mutate([{ op: 'set', path: ['target'], value: 'auto' }], store.revision))
+      .toThrowError(expect.objectContaining({ code: 'settings/rejected' }))
+    expect(store.read('toString')).toEqual(defaults)
+    expect(readSessionConfig(defaults, '__proto__')).toEqual(defaults)
+    expect(store.revision).toBe(0)
+  } finally { storage.cleanup() }
 })

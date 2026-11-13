@@ -28,33 +28,41 @@ const fields = {
   timeoutMs: field(Schema.number().min(1000).max(300000).step(1).default(60000), '翻译超时（毫秒）'),
   maxChars: field(Schema.number().min(100).max(4000).step(1).default(2000), '每次翻译最大 Unicode 字符数'),
 }
-export const Config = Schema.object(fields)
-export const StoredConfig = Schema.object({
-  ...fields,
-  sessionOverrides: field(Schema.dict(QuickConfig).default({}), '每个会话独立的快捷翻译设置'),
-})
 export type LiveConfig = { [K in keyof Options]: Options[K] | { get(): Options[K] | undefined } } & {
   sessionOverrides?: SessionOverrides | { get(): SessionOverrides | undefined }
 }
+export interface Config extends Partial<LiveConfig> {}
+export const Config = Schema.object(fields)
+export type StoredOptions = Options & { sessionOverrides: SessionOverrides }
+export const StoredConfig: Schema<Partial<StoredOptions>, StoredOptions> = Schema.object({
+  ...fields,
+  sessionOverrides: field(Schema.dict(QuickConfig).default({}), '每个会话独立的快捷翻译设置'),
+}) as unknown as Schema<Partial<StoredOptions>, StoredOptions>
+
 /** Read one consistent configuration snapshot for a translation operation. */
 export function readConfig(config: Partial<LiveConfig>): Options {
   const result = { ...defaults }
   for (const key of Object.keys(defaults) as (keyof Options)[]) {
     const value = config[key]
-    const unwrapped = typeof value === 'object' ? value.get() : value
-    if (unwrapped !== undefined) Object.assign(result, { [key]: unwrapped })
+    const unwrapped = value !== null && typeof value === 'object' && typeof (value as { get?: unknown }).get === 'function'
+      ? (value as { get(): Options[typeof key] | undefined }).get()
+      : value
+    if (typeof unwrapped === typeof defaults[key]) Object.assign(result, { [key]: unwrapped })
   }
   return result
 }
 /** Read the independent file's Session override dictionary. */
 export function readSessionOverrides(config: Partial<LiveConfig>): SessionOverrides | undefined {
   const configured = config.sessionOverrides
-  return configured && typeof (configured as { get?: unknown }).get === 'function'
+  const value = configured !== null && configured !== undefined && typeof (configured as { get?: unknown }).get === 'function'
     ? (configured as { get(): SessionOverrides | undefined }).get()
     : configured as SessionOverrides | undefined
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : undefined
 }
 /** Resolve global defaults with only the addressed Session's quick choices. */
 export function readSessionConfig(config: Partial<LiveConfig>, sessionId: string): Options {
   const result = readConfig(config)
-  return { ...result, ...readSessionOverrides(config)?.[sessionId] }
+  const overrides = readSessionOverrides(config)
+  const override = overrides && Object.hasOwn(overrides, sessionId) ? overrides[sessionId] : undefined
+  return override ? { ...result, ...override } : result
 }
