@@ -38,18 +38,20 @@ test('compatibility matrix selects the exact Node 24 development cohort', () => 
       'cohort-node': config.node,
     })),
   })
-  assert.deepEqual(Object.keys(manifest.dshCompatibility), ['0.2.2-rc.2', '0.2.2-rc.3'])
+  assert.deepEqual(Object.keys(manifest.dshCompatibility), ['0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', '0.2.2-rc.5'])
   assert.equal(manifest.dshCompatibility['0.2.2-rc.2'].node, 24)
   assert.equal(manifest.dshCompatibility['0.2.2-rc.3'].node, 24)
+  assert.equal(manifest.dshCompatibility['0.2.2-rc.4'].node, 24)
+  assert.equal(manifest.dshCompatibility['0.2.2-rc.5'].node, 24)
   assert.equal(manifest.engines.node, '>=24.9.0')
-  assert.equal(manifest.engines.dsh, '0.2.2-rc.2 || 0.2.2-rc.3')
+  assert.equal(manifest.engines.dsh, '>=0.2.2-rc.2 <0.2.2')
   const defaultVersion = Object.keys(manifest.dshCompatibility).at(-1)
   const activeVersion = process.env.DSH_TEST_VERSION || defaultVersion
   for (const [name, range] of Object.entries(manifest.devDependencies)) {
     if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, activeVersion)
   }
   for (const [name, range] of Object.entries(manifest.peerDependencies)) {
-    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '0.2.2-rc.2 || 0.2.2-rc.3')
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(range, '>=0.2.2-rc.2 <0.2.2')
   }
   const cleanDefault = structuredClone(manifest)
   delete cleanDefault.overrides
@@ -101,7 +103,7 @@ test('verification records failures, continues independent checks and summarizes
   writeFileSync(npm, `#!${process.execPath}\nprocess.exit(process.argv.includes(process.env.FAIL_STEP) ? 1 : 0)\n`)
   chmodSync(npm, 0o755)
   const major = process.versions.node.split('.')[0]
-  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.2-rc.3', FAIL_STEP: 'typecheck' }
+  const env = { PATH: `${root}/bin:${process.env.PATH}`, DSH_TEST_VERSION: '0.2.2-rc.5', FAIL_STEP: 'typecheck' }
   const result = run(root, 'ci-verify.mjs', ['verify', major], env)
   assert.equal(result.status, 1, result.stderr)
   let report = JSON.parse(readFileSync(join(root, `artifacts/ci/node-${major}.json`)))
