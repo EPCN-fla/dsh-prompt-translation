@@ -35,11 +35,12 @@ The plugin provides separate content switches without modifying the Agent loop o
 
 ## Installation
 
-The correspondence matrix between plugin versions and DSH versions is as follows. Plugin 0.2.1 supports DSH 0.2.2-rc.2 through 0.2.2-rc.5 and requires Node.js >=24.9.0; plugin 0.2.0 supports only DSH 0.2.2-rc.2; older plugin rows are historical compatibility records.
+The correspondence matrix between plugin versions and DSH versions is as follows. Plugin 0.2.2 supports DSH 0.2.2-rc.2 through 0.2.2-rc.5 and requires Node.js >=24.9.0; plugin 0.2.1 supports DSH 0.2.2-rc.2 and 0.2.2-rc.3; plugin 0.2.0 supports only DSH 0.2.2-rc.2; older plugin rows are historical compatibility records.
 
 | Plugin version | Minimum compatible DSH version | Highest compatible DSH version |
 | --- | --- | --- |
-| 0.2.1 | 0.2.2-rc.2 | 0.2.2-rc.5 |
+| 0.2.2 | 0.2.2-rc.2 | 0.2.2-rc.5 |
+| 0.2.1 | 0.2.2-rc.2 | 0.2.2-rc.3 |
 | 0.2.0 | 0.2.2-rc.2 | 0.2.2-rc.2 |
 | 0.1.6 | 0.2.0-rc.1 | 0.2.2-rc.1 |
 | 0.1.5 | 0.2.0-rc.1 | 0.2.2-rc.1 |
